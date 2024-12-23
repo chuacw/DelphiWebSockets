@@ -1,15 +1,19 @@
-unit IdIIOHandlerWebSocket;
+unit Journeyman.WebSocket.Interfaces;
 
 interface
 
 uses
-  System.Classes, IdGlobal, IdSocketHandle, IdBuffer, IdWebSocketTypes,
+  System.Classes, IdGlobal, IdSocketHandle, IdBuffer, Journeyman.WebSocket.Types,
   System.SysUtils;
 
 type
   {$IF CompilerVersion >= 26}   // XE5
   TIdTextEncoding = IIdTextEncoding;
   {$ENDIF}
+  ISetWebSocketClosing = interface
+    ['{7EB09E63-DF10-472E-8B1C-DAB7EAE2164E}']
+    procedure SetWebSocketClosing(const AValue: TOnWebSocketClosing);
+  end;
 
   IIOHandlerWebSocket = interface
     ['{6F5E19B2-7D2D-436D-B5A7-063C2B4E59B8}']

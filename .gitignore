@@ -66,3 +66,5 @@ __recovery/
 *.stat
 Tests/
 Demo/
+Win32/
+Win64/

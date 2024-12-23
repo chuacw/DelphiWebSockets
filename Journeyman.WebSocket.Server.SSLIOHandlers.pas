@@ -1,10 +1,16 @@
-unit IdServerIOHandlerWebSocketSSL;
+unit Journeyman.WebSocket.Server.SSLIOHandlers;
+// unit IdServerIOHandlerWebSocketSSL;
 
 interface
 
 uses
-  IdServerIOHandlerStack, IdIOHandlerWebSocketSSL, IdSocketHandle, IdThread,
-  IdYarn, IdIOHandler, IdWebSocketTypes, IdIOHandlerWebsocket, IdSSLOpenSSL,
+  IdServerIOHandlerStack,
+  Journeyman.WebSocket.SSLIOHandlers,
+  IdSocketHandle, IdThread,
+  IdYarn, IdIOHandler, Journeyman.WebSocket.Types,
+  Journeyman.WebSocket.Interfaces,
+  Journeyman.WebSocket.IOHandlers,
+  IdSSLOpenSSL,
   IdSSL;
 
 type

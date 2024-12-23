@@ -1,4 +1,4 @@
-unit IdWebSocketConsts;
+unit Journeyman.WebSocket.Consts;
 
 interface
 
@@ -16,6 +16,7 @@ const
   SHTTPOriginHeader: string    = 'Origin';
   SKeepAlive: string           = 'keep-alive';
   SNoCache: string             = 'no-cache';
+  SServer: string              = 'Server';
   SSwitchingProtocols: string  = 'Switching Protocols';
   SUpgrade: string             = 'Upgrade';
   SWebSocket: string           = 'websocket';
@@ -27,6 +28,7 @@ const
   SWebSocketVersion: string    = 'Sec-WebSocket-Version';
 
   CSwitchingProtocols: Int16   = 101;
+  CNoContent: Int16            = 204;
   MSG_OOB                      = $01;                  // Process out-of-band data.
 
 {$IF DEFINED(MSWINDOWS)}

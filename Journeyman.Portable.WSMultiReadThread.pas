@@ -1,13 +1,13 @@
-unit Portable.WSMultiReadThread;
+unit Journeyman.Portable.WSMultiReadThread;
 
 interface
 
 uses
-  WSMultiReadThread, IdStack, IdStackConsts;
+  Journeyman.WebSocket.MultiReadThread, IdStack, IdStackConsts;
 
 type
 
-  TPortableMultiReadThread = class(WSMultiReadThread.TIdWebSocketMultiReadThread)
+  TPortableMultiReadThread = class(TIdWebSocketMultiReadThread)
   protected
     FReadSet, FExceptionSet: TIdSocketList;
     FInterval: Integer;
@@ -33,14 +33,15 @@ implementation
 {$WARN UNIT_PLATFORM OFF}
 uses
   IdStackBSDBase, IdGlobal, System.SysUtils,
-  IdIIOHandlerWebSocket, System.DateUtils, IdWebSocketConsts,
+  Journeyman.WebSocket.Interfaces,
+  System.DateUtils, Journeyman.WebSocket.Consts,
   {$IF DEFINED(MSWINDOWS)}
     Winapi.Windows,
   {$ELSEIF DEFINED(POSIX)}
     Posix.Fcntl, Posix.Unistd, Posix.StrOpts,
   {$ENDIF}
-  System.Generics.Collections, IdHTTPWebSocketClient, IdWebSocketTypes,
-  WSDebugger;
+  System.Generics.Collections, Journeyman.WebSocket.Client, Journeyman.WebSocket.Types,
+  Journeyman.WebSocket.Debugger;
 
 {$IF DEFINED(ANDROID)}
 type

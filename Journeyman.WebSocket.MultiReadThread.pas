@@ -1,12 +1,12 @@
-unit WSMultiReadThread;
+unit Journeyman.WebSocket.MultiReadThread;
 
 interface
 
 uses
   System.Classes, IdStackConsts,
   {$IF DEFINED(MSWINDOWS)}IdWinsock2,{$ENDIF}
-  IdHTTPWebSocketClient, System.Generics.Collections,
-  IdWebSocketTypes;
+  Journeyman.WebSocket.Client, System.Generics.Collections,
+  Journeyman.WebSocket.Types;
 
 type
 
@@ -67,17 +67,20 @@ type
     GMultiReadClass: TMultiReadClass;
   end;
 
+
+
 implementation
 
 uses
   IdStack, IdStackBSDBase, IdGlobal, System.SysUtils,
-  IdIIOHandlerWebSocket, System.DateUtils,
+  Journeyman.WebSocket.Interfaces,
+  System.DateUtils,
 {$IF DEFINED(MSWINDOWS)}
   Winapi.Windows,
 {$ELSE}
   FMX.Platform,
 {$ENDIF}
-  WSDebugger;
+  Journeyman.WebSocket.Debugger;
 
 var
   GUnitFinalized: Boolean = false;
@@ -99,7 +102,7 @@ begin
     if LList.IndexOf(AChannel) >= 0 then
       Exit;
 
-    Assert(LList.Count < 64, 'Max 64 connections can be handled by one read thread!');  // due to restrictions of the "select" API
+    Assert(LList.Count < 64, 'Max 64 connections can be handled by one read thread!');  //due to restrictions of the "select" API
     LList.Add(AChannel);
 
     // trigger the "select" wait
@@ -136,6 +139,7 @@ end;
 procedure TIdWebSocketMultiReadThread.BreakSelectWait;
 {$IF DEFINED(MSWINDOWS)}
 var
+  //iResult: Integer;
   LAddr: TSockAddrIn6;
 {$ENDIF}
 begin
@@ -144,11 +148,11 @@ begin
     Exit;
 
   FillChar(LAddr, SizeOf(LAddr), 0);
-  // Id_IPv4
+  //Id_IPv4
   with PSOCKADDR(@LAddr)^ do
   begin
     sin_family := Id_PF_INET4;
-    // dummy address and port
+    //dummy address and port
     (GStack as TIdStackBSDBase).TranslateStringToTInAddr('0.0.0.0', sin_addr, Id_IPv4);
     sin_port := htons(1); // port 1
   end;
@@ -383,7 +387,7 @@ begin
               begin
                 chn := nil;
                 try
-                  // get first one
+                  //get first one
                   LListX := FReconnectList.LockList;
                   try
                     if LListX.Count <= 0 then
@@ -419,6 +423,7 @@ begin
                       end;
                     end;
 
+                  // remove from todo list
                   LListX := FReconnectList.LockList;
                   try
                     if LListX.Count > 0 then
@@ -452,7 +457,7 @@ begin
   {$ENDIF}
   LList := FChannels.LockList;
   try
-    WSDebugger.OutputDebugString('ReadFromAllChannels, channel count: '+ LList.Count.ToString);
+    OutputDebugString('ReadFromAllChannels, channel count: '+ LList.Count.ToString);
     iResult := 0;
 {$IF DEFINED(MSWINDOWS)}
     iCount  := 0;
@@ -465,8 +470,8 @@ begin
       if chn.NoAsyncRead then
         Continue;
 
-      // valid?
-      if // not chn.Busy and    also take busy channels (will be ignored later), otherwise we have to break/reset for each RO function execution
+      //valid?
+      if //not chn.Busy and    also take busy channels (will be ignored later), otherwise we have to break/reset for each RO function execution
          (chn.IOHandler <> nil) and
          (chn.IOHandler.IsWebSocket) and
          (chn.Socket <> nil) and
@@ -504,8 +509,8 @@ begin
     FExceptionSet.fd_array[0] := FTempHandle;
 
     // wait 15s till some data
-    FInterval.tv_sec  := Self.ReadTimeout div 1000; // 5s
-    FInterval.tv_usec := Self.ReadTimeout mod 1000;
+    FInterval.tv_sec  := ReadTimeout div 1000; // 5s
+    FInterval.tv_usec := ReadTimeout mod 1000;
 
     {$IF DEFINED(DEBUG_WS)}
     var LStart := Now;

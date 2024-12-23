@@ -1,19 +1,19 @@
-unit IdHTTPWebSocketClient;
+unit Journeyman.WebSocket.Client;
 interface
 
 uses
-  System.Classes,
-  IdHTTP,
-  System.Types,
+  System.Classes, IdHTTP, System.Types,
   IdHashSHA,                     // XE3 etc
   IdIOHandler,
-  IdIOHandlerWebSocket,
+//  IdIOHandlerWebSocket,
+  Journeyman.WebSocket.IOHandlers,
   System.Net.Socket,
 {$IF DEFINED(MSWINDOWS)}
   IdWinsock2,
 {$ENDIF}
-  System.Generics.Collections, System.SyncObjs, IdStack, IdSocketIOHandling,
-  IdIIOHandlerWebSocket, System.SysUtils, IdWebSocketTypes, IdComponent,
+  System.Generics.Collections, System.SyncObjs, IdStack,
+  Journeyman.WebSocket.Interfaces,
+  System.SysUtils, Journeyman.WebSocket.Types, IdComponent,
   IdSSLOpenSSLHeaders, IdCTypes;
 
 type
@@ -26,8 +26,8 @@ type
   TSocketIOMsg = procedure(const AClient: TIdHTTPWebSocketClient;
     const aText: string; aMsgNr: Integer) of object;
 
-  TIdSocketIOHandling_Ext = class(TIdSocketIOHandling)
-  end;
+//  TIdSocketIOHandling_Ext = class(TIdSocketIOHandling)
+//  end;
 
   TIdHTTPWebSocketClient = class(TIdHTTP)
   private
@@ -46,7 +46,7 @@ type
 
     function  GetIOHandlerWS: IIOHandlerWebSocket;
     procedure SetIOHandlerWS(const AValue: IIOHandlerWebSocket);
-    procedure SetOnData(const AValue: TWebSocketMsgBin);
+    procedure SetOnBinData(const AValue: TWebSocketMsgBin);
     procedure SetOnTextData(const AValue: TWebSocketMsgText);
     procedure SetOnWebSocketClosing(const AValue: TOnWebSocketClosing);
     procedure SetWriteTimeout(const AValue: Integer);
@@ -55,8 +55,8 @@ type
     FCS: System.SyncObjs.TCriticalSection;
     FSocketIOCompatible: Boolean;
     FSocketIOHandshakeResponse: string;
-    FSocketIO: TIdSocketIOHandling_Ext;
-    FSocketIOContext: ISocketIOContext;
+//    FSocketIO: TIdSocketIOHandling_Ext;
+//    FSocketIOContext: ISocketIOContext;
     FSocketIOConnectBusy: Boolean;
     FUseSSL: Boolean;
     /// <summary>Assign a TProc to FCustomHeadersProc in order to inject headers
@@ -66,7 +66,7 @@ type
 
     // FHeartBeat: TTimer;
     // procedure HeartBeatTimer(Sender: TObject);
-    function  GetSocketIO: TIdSocketIOHandling;
+//    function  GetSocketIO: TIdSocketIOHandling;
   protected
     /// <summary>Provides an opportunity for overriding custom headers if FCustomHeadersProc is
     /// assigned a value, by calling it.</summary>
@@ -130,7 +130,7 @@ type
     property  IOHandler: IIOHandlerWebSocket read GetIOHandlerWS write SetIOHandlerWS;
 
     // websockets
-    property  OnMessageBin : TWebSocketMsgBin read FOnMessageBin write SetOnData;
+    property  OnMessageBin : TWebSocketMsgBin read FOnMessageBin write SetOnBinData;
     property  OnMessageText: TWebSocketMsgText read FOnMessageText write SetOnTextData;
     property  OnWebSocketClosing: TOnWebSocketClosing read FOnWebSocketClosing
       write SetOnWebSocketClosing;
@@ -142,7 +142,7 @@ type
 
     // https://github.com/LearnBoost/socket.io-spec
     property  SocketIOCompatible: Boolean read FSocketIOCompatible write FSocketIOCompatible;
-    property  SocketIO: TIdSocketIOHandling read GetSocketIO;
+//    property  SocketIO: TIdSocketIOHandling read GetSocketIO;
   published
     property  Host;
     property  Port;
@@ -163,8 +163,12 @@ uses
   Posix.SysSocket, Posix.Fcntl, FMX.Platform,
 {$ENDIF}
   System.StrUtils, System.DateUtils,
-  IdWebSocketConsts, IdURI, IdIOHandlerWebSocketSSL, IdIPAddress,
-  WSDebugger, System.Diagnostics, WSMultiReadThread, IdSSLOpenSSL;
+  Journeyman.WebSocket.Consts, IdURI,
+  Journeyman.WebSocket.SSLIOHandlers,
+  IdIPAddress,
+  Journeyman.WebSocket.Debugger, System.Diagnostics,
+  Journeyman.WebSocket.MultiReadThread, IdSSLOpenSSL,
+  Journeyman.WebSocket.Exceptions;
 
 { TIdHTTPWebSocketClient }
 
@@ -184,7 +188,7 @@ begin
   IOHandler := LHandler;
   ManagedIOHandler := True;
 
-  FSocketIO  := TIdSocketIOHandling_Ext.Create;
+//  FSocketIO  := TIdSocketIOHandling_Ext.Create;
 //  FHeartBeat := TTimer.Create(nil);
 //  FHeartBeat.Enabled := False;
 //  FHeartBeat.OnTimer := HeartBeatTimer;
@@ -223,9 +227,9 @@ begin
   TIdWebSocketDispatchThread.Instance.QueueEvent(
     procedure
     begin
-      if FSocketIOCompatible then
-        FSocketIO.ProcessSocketIORequest(FSocketIOContext as TSocketIOContext, AEvent)
-      else if Assigned(OnMessageText) then
+//      if FSocketIOCompatible then
+//        FSocketIO.ProcessSocketIORequest(FSocketIOContext as TSocketIOContext, AEvent)
+      if Assigned(OnMessageText) then
         OnMessageText(Self, AEvent);
     end);
 end;
@@ -344,7 +348,7 @@ begin
     finally
       Unlock;
     end;
-    FSocketIO.Free;
+//    FSocketIO.Free;
     FHash.Free;
     TThread.Current.NameThreadForDebugging('Calling inherited on WebSocketClient ' + TThread.Current.ThreadID.ToString);
     inherited; // This will send the required closes
@@ -361,13 +365,13 @@ begin
   then
     TIdWebSocketMultiReadThread.Instance.RemoveClient(Self);
 
-  if ANotifyPeer and SocketIOCompatible then
-    FSocketIO.WriteDisconnect(FSocketIOContext as TSocketIOContext)
-  else
-    FSocketIO.FreeConnection(FSocketIOContext as TSocketIOContext);
+//  if ANotifyPeer and SocketIOCompatible then
+//    FSocketIO.WriteDisconnect(FSocketIOContext as TSocketIOContext)
+//  else
+//    FSocketIO.FreeConnection(FSocketIOContext as TSocketIOContext);
 
 //  IInterface(FSocketIOContext)._Release;
-  FSocketIOContext := nil;
+//  FSocketIOContext := nil;
 
   Lock;
   try
@@ -438,10 +442,10 @@ begin
     Result := 0;
 end;
 
-function TIdHTTPWebSocketClient.GetSocketIO: TIdSocketIOHandling;
-begin
-  Result := FSocketIO;
-end;
+//function TIdHTTPWebSocketClient.GetSocketIO: TIdSocketIOHandling;
+//begin
+//  Result := FSocketIO;
+//end;
 
 function TIdHTTPWebSocketClient.TryConnect: Boolean;
 begin
@@ -513,6 +517,8 @@ end;
 procedure TIdHTTPWebSocketClient.Write(const AMessage: string);
 begin
   var LHandler := IOHandler;
+  if not Assigned(LHandler) then
+    Exit;
   if LHandler.Connected then
     begin
       LHandler.Write(AMessage);
@@ -522,6 +528,8 @@ end;
 procedure TIdHTTPWebSocketClient.Write(const AStream: TStream);
 begin
   var LHandler := IOHandler;
+  if not Assigned(LHandler) then
+    Exit;
   if LHandler.Connected then
     begin
       InternalWrite(AStream);
@@ -559,13 +567,13 @@ begin
       end;
     end;
 
-  if ANotifyPeer and SocketIOCompatible then
-    FSocketIO.WriteDisconnect(FSocketIOContext as TSocketIOContext)
-  else
-    FSocketIO.FreeConnection(FSocketIOContext as TSocketIOContext);
+//  if ANotifyPeer and SocketIOCompatible then
+//    FSocketIO.WriteDisconnect(FSocketIOContext as TSocketIOContext)
+//  else
+//    FSocketIO.FreeConnection(FSocketIOContext as TSocketIOContext);
 
 //  IInterface(FSocketIOContext)._Release;
-  FSocketIOContext := nil;
+//  FSocketIOContext := nil;
 
   Lock;
   try
@@ -602,7 +610,7 @@ procedure TIdHTTPWebSocketClient.InternalUpgradeToWebSocket(
 
 var
   LURL: string;
-  strmResponse: TMemoryStream;
+  LStreamResponse: TMemoryStream;
   LKey, LResponseKey, LUserAgent, LWSResourceName: string;
   LSocketioExtended: string;
   LLocked: boolean;
@@ -613,7 +621,7 @@ begin
   TIdWebSocketMultiReadThread.Instance.RemoveClient(Self);
 
   LLocked := False;
-  strmResponse := TMemoryStream.Create;
+  LStreamResponse := TMemoryStream.Create;
   Lock;
   try
     // reset pending data
@@ -633,20 +641,20 @@ begin
       Request.Clear;
       Request.Connection := 'keep-alive';
       LURL := Format('http%s://%s:%d/socket.io/1/', [IfThen(UseSSL, 's', ''), Host, Port]);
-      strmResponse.Clear;
+      LStreamResponse.Clear;
 
       ReadTimeout := 5 * 1000;
       // get initial handshake
-      Post(LURL, strmResponse, strmResponse);
+      Post(LURL, LStreamResponse, LStreamResponse);
       if ResponseCode = 200 {OK} then
       begin
         // if not Connected then  //reconnect
         //  Self.Connect;
-        strmResponse.Position := 0;
+        LStreamResponse.Position := 0;
         // The body of the response should contain the session id (sid) given to the client,
         // followed by the heartbeat timeout, the connection closing timeout, and the list of supported transports separated by :
         // 4d4f185e96a7b:15:10:websocket,xhr-polling
-        with TStreamReader.Create(strmResponse) do
+        with TStreamReader.Create(LStreamResponse) do
         try
           FSocketIOHandshakeResponse := ReadToEnd;
         finally
@@ -665,9 +673,8 @@ begin
 
     LUserAgent := Request.UserAgent;
     Request.Clear;
-    Request.UserAgent := LUserAgent;
     Request.CustomHeaders.Clear;
-    strmResponse.Clear;
+    LStreamResponse.Clear;
     // http://www.websocket.org/aboutwebsocket.html
     (* GET ws://echo.websocket.org/?encoding=text HTTP/1.1
      Origin: http://websocket.org
@@ -679,10 +686,13 @@ begin
      Sec-WebSocket-Version: 13 *)
 
     // Connection: Upgrade
-    Request.CustomHeaders.AddValue(SConnection, SUpgrade);
+    Request.UserAgent := LUserAgent;
+    Request.CustomHeaders.AddValue(SConnection, SKeepAlive+', ' + SUpgrade);
     // Upgrade: websocket
     Request.CustomHeaders.AddValue(SUpgrade, SWebSocket);
 
+    Request.Pragma := 'no-cache';
+    Request.CacheControl := 'no-cache';
     // Sec-WebSocket-Key
     LKey := GenerateWebSocketKey;
 
@@ -732,7 +742,7 @@ begin
       Request.URL    := LURL;
       Request.Method := Id_HTTPMethodGet;
       Request.Source := nil;
-      Response.ContentStream := strmResponse;
+      Response.ContentStream := LStreamResponse;
       PrepareRequest(Request);
 
       // connect and upgrade
@@ -765,9 +775,9 @@ begin
     end else
     begin
       case FRequestType of
-        wsrtGet: Get(LURL, strmResponse, [101]);
+        wsrtGet: Get(LURL, LStreamResponse, [101]);
         wsrtPost: begin
-            Post(LURL, strmResponse, [101]);
+            Post(LURL, LStreamResponse, [101]);
         end;
       end;
     end;
@@ -829,19 +839,19 @@ begin
     AFailedReason := '';
     Assert(Connected);
 
-    if SocketIOCompatible then
-    begin
-      FSocketIOContext := TSocketIOContext.Create(Self);
-      (FSocketIOContext as TSocketIOContext).ConnectSend := True;  // connect already send via url? GET /socket.io/1/websocket/9elrbEFqiimV29QAM6T-
-      FSocketIO.WriteConnect(FSocketIOContext as TSocketIOContext);
-    end;
+//    if SocketIOCompatible then
+//    begin
+//      FSocketIOContext := TSocketIOContext.Create(Self);
+//      (FSocketIOContext as TSocketIOContext).ConnectSend := True;  //connect already send via url? GET /socket.io/1/websocket/9elrbEFqiimV29QAM6T-
+//      FSocketIO.WriteConnect(FSocketIOContext as TSocketIOContext);
+//    end;
 
     // always read the data! (e.g. RO use override of AsyncDispatchEvent to process data)
     // if Assigned(OnBinData) or Assigned(OnTextData) then
   finally
     Request.Clear;
     Request.CustomHeaders.Clear;
-    strmResponse.Free;
+    LStreamResponse.Free;
 
     if LLocked and (LHandler <> nil) then
       LHandler.Unlock;
@@ -946,32 +956,33 @@ end;
 
 procedure TIdHTTPWebSocketClient.Ping;
 var
-  ws: IIOHandlerWebSocket;
+  LWebSocket: IIOHandlerWebSocket;
 begin
   if TryLock then
   try
-    ws  := IOHandler as IIOHandlerWebSocket;
-    ws.LastPingTime := Now;
+    LWebSocket := IOHandler as IIOHandlerWebSocket;
+    LWebSocket.LastPingTime := Now;
 
     // socket.io?
-    if SocketIOCompatible and ws.IsWebSocket then
-    begin
-      FSocketIO.Lock;
-      try
-        if (FSocketIOContext <> nil) then
-          FSocketIO.WritePing(FSocketIOContext as TSocketIOContext);  //heartbeat socket.io message
-      finally
-        FSocketIO.Unlock;
-      end
-    end
+//    if SocketIOCompatible and LWebSocket.IsWebSocket then
+//    begin
+//      FSocketIO.Lock;
+//      try
+//        if (FSocketIOContext <> nil) then
+//          FSocketIO.WritePing(FSocketIOContext as TSocketIOContext);  //heartbeat socket.io message
+//      finally
+//        FSocketIO.Unlock;
+//      end
+//    end
     // only websocket?
-    else if not SocketIOCompatible and ws.IsWebSocket then
+//    else if not SocketIOCompatible and LWebSocket.IsWebSocket then
+    if LWebSocket.IsWebSocket then
     begin
-      if ws.TryLock then
+      if LWebSocket.TryLock then
       try
-        ws.WriteData(nil, wdcPing);
+        LWebSocket.WriteData(nil, wdcPing);
       finally
-        ws.Unlock;
+        LWebSocket.Unlock;
       end;
     end;
   finally
@@ -1000,7 +1011,7 @@ begin
       LStreamEvent.Clear;
 
       // first is the data type TWSDataType(text or bin), but is ignore/not needed
-      LWSCode := TWSDataCode(IOHandler.ReadLongWord);
+      LWSCode := TWSDataCode(IOHandler.ReadUInt32); // chuacw 24 Sep 2020
       if not (LWSCode in [wdcText, wdcBinary, wdcPing, wdcPong]) then
       begin
         // Sleep(0);
@@ -1068,7 +1079,7 @@ begin
   SetIOHandler(AValue as TIdIOHandler);
 end;
 
-procedure TIdHTTPWebSocketClient.SetOnData(const AValue: TWebSocketMsgBin);
+procedure TIdHTTPWebSocketClient.SetOnBinData(const AValue: TWebSocketMsgBin);
 begin
 //  if not Assigned(Value) and not Assigned(FOnTextData) then
 //    TIdWebSocketMultiReadThread.Instance.RemoveClient(Self);

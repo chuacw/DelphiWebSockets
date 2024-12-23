@@ -1,4 +1,4 @@
-unit IdIOHandlerWebSocket;
+unit Journeyman.WebSocket.IOHandlers;
 {.$DEFINE DEBUG_WS}
 {$WARN SYMBOL_DEPRECATED OFF}
 {$WARN SYMBOL_PLATFORM OFF}
@@ -9,12 +9,12 @@ interface
 uses
   System.Classes, System.SyncObjs, System.Generics.Collections,
   IdIOHandlerStack, IdGlobal, IdException, IdBuffer, IdSSLOpenSSL,
-  IdSocketHandle, IdIIOHandlerWebSocket, IdWebSocketTypes, System.SysUtils;
+  IdSocketHandle, Journeyman.WebSocket.Interfaces,
+  Journeyman.WebSocket.Types, System.SysUtils;
 
 type
 
   TIdIOHandlerWebSocket   = class;
-  EIdWebSocketHandleError = class(EIdSocketHandleError);
 
   {$IF CompilerVersion >= 26}   // XE5
   TIdTextEncoding = IIdTextEncoding;
@@ -78,7 +78,8 @@ type
     procedure InitComponent; override;
   public
     function WriteData(const aData: TIdBytes; aType: TWSDataCode;
-                        aFIN: boolean = true; aRSV1: boolean = false; aRSV2: boolean = false; aRSV3: boolean = false): integer;
+      aFIN: boolean = true; aRSV1: boolean = false;
+      aRSV2: boolean = false; aRSV3: boolean = false): Integer;
     property BusyUpgrading : Boolean read FBusyUpgrading write FBusyUpgrading;
     property IsWebSocket   : Boolean read FIsWebSocket   write SetIsWebSocket;
     property IsServerSide  : Boolean read FIsServerSide  write FIsServerSide;
@@ -143,7 +144,8 @@ uses
   Posix.SysSocket, FMX.Platform,
 {$ENDIF}
   IdStream, IdStack, IdExceptionCore, IdResourceStrings, IdResourceStringsCore,
-  IdStackConsts, WSDebugger, IdWebSocketConsts;
+  IdStackConsts, Journeyman.WebSocket.Debugger, Journeyman.WebSocket.Consts,
+  Journeyman.WebSocket.Exceptions;
 
 function BytesToStringRaw(const AValue: TIdBytes; aSize: Integer = -1): string;
 var
@@ -296,6 +298,9 @@ begin
 
   FWSInputBuffer.Free;
   FMessageStream.Free;
+  FOnNotifyClosed := nil;
+  FOnNotifyClosing := nil;
+  FOnWebSocketClosing := nil;
   inherited;
 end;
 
@@ -321,7 +326,7 @@ end;
 
 function TIdIOHandlerWebSocket.GetConnected: Boolean;
 begin
-  Result := Self.Connected;
+  Result := Connected;
 end;
 
 function TIdIOHandlerWebSocket.GetInputBuffer: TIdBuffer;
@@ -600,7 +605,7 @@ begin
       {$IFDEF DEBUG_WS}
       if DebugHook > 0 then
         OutputDebugString(PChar(Format('Send (non ws, TID:%d, P:%d): %s',
-          [TThread.Current.ThreadID, Self.Binding.PeerPort, BytesToStringRaw(ABuffer)])));
+          [TThread.Current.ThreadID, Binding.PeerPort, BytesToStringRaw(ABuffer)])));
       {$ENDIF}
       Result := inherited WriteDataToTarget(ABuffer, AOffset, ALength)
     end else
@@ -609,7 +614,7 @@ begin
       {$IFDEF DEBUG_WS}
       if DebugHook > 0 then
         OutputDebugString(PChar(Format('Send (ws, TID:%d, P:%d): %s',
-          [TThread.Current.ThreadID, Self.Binding.PeerPort, BytesToStringRaw(data)])));
+          [TThread.Current.ThreadID, Binding.PeerPort, BytesToStringRaw(data)])));
 
       {$ENDIF}
       try
@@ -681,7 +686,7 @@ begin
       {$IFDEF DEBUG_WS}
       if DebugHook > 0 then
         OutputDebugString(PChar(Format('Received (non ws, TID:%d, P:%d): %s',
-          [TThread.Current.ThreadID, Self.Binding.PeerPort, BytesToStringRaw(VBuffer, Result)])));
+          [TThread.Current.ThreadID, Binding.PeerPort, BytesToStringRaw(VBuffer, Result)])));
       {$ENDIF}
     end
     else
@@ -693,16 +698,16 @@ begin
         {$IFDEF DEBUG_WS}
         if DebugHook > 0 then
           OutputDebugString(PChar(Format('Received (ws, TID:%d, P:%d): %s',
-            [TThread.Current.ThreadID, Self.Binding.PeerPort, BytesToStringRaw(VBuffer)])));
+            [TThread.Current.ThreadID, Binding.PeerPort, BytesToStringRaw(VBuffer)])));
         {$ENDIF}
 
         // first write the data code (text or binary, ping, pong)
-        FInputBuffer.Write(LongWord(Ord(wscode)));
+        FInputBuffer.Write(UInt32(Ord(wscode)));  // chuacw 24 Sep 2020
         // we write message size here, vbuffer is written after this. This way we can use ReadStream to get 1 single message (in case multiple messages in FInputBuffer)
         if LargeStream then
           FInputBuffer.Write(Int64(Result))
         else
-          FInputBuffer.Write(LongWord(Result))
+          FInputBuffer.Write(UInt32(Result))      // chuacw 24 Sep 2020
       except
         FClosedGracefully := True; // closed (but not gracefully?)
         raise;
@@ -741,7 +746,7 @@ begin
       Assert(Length(iaReadBuffer) = iReadCount);
 
       // store client extension bits
-      if Self.IsServerSide then
+      if IsServerSide then
       begin
         ClientExtensionBits := [];
         if bRSV1 then ClientExtensionBits := ClientExtensionBits + [webBit1];
@@ -780,7 +785,7 @@ begin
             end;
 
             FClosing := True;
-            Self.Close;
+            Close;
           end;
         //Note: control frames can be send between fragmented frames
         wdcPing:
@@ -1092,7 +1097,7 @@ begin
   {$IFDEF DEBUG_WS}
   if DebugHook > 0 then
     OutputDebugString(PChar(Format('Received (TID:%d, P:%d, Count=%d): %s',
-      [TThread.Current.ThreadID, Self.Binding.PeerPort, Result, BytesToStringRaw(aData, Result)])));
+      [TThread.Current.ThreadID, Binding.PeerPort, Result, BytesToStringRaw(aData, Result)])));
   {$ENDIF}
 end;
 

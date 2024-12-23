@@ -1,4 +1,4 @@
-unit IdServerWebSocketHandling;
+unit Journeyman.WebSocket.Server.IOHandlers;
 interface
 
 uses
@@ -9,59 +9,79 @@ uses
   {$ELSE}
   IdHashSHA,                     // XE3 etc
   {$ENDIF}
-  IdServerSocketIOHandling, IdSocketIOHandling, IdServerBaseHandling,
-  IdServerWebSocketContext, IdIOHandlerWebSocket, IdWebSocketTypes;
+  IdServerIOHandlerSocket,
+  Journeyman.WebSocket.Server.Contexts,
+  Journeyman.WebSocket.IOHandlers,
+  Journeyman.WebSocket.Types,
+  Journeyman.WebSocket.Interfaces,
+  IdServerIOHandlerStack, IdIOHandlerStack, IdGlobal,
+  IdIOHandler, IdYarn, IdSocketHandle;
 
 type
-  TIdServerSocketIOHandling_Ext = class(TIdServerSocketIOHandling)
-  end;
+//  TIdServerSocketIOHandling_Ext = class(TIdServerSocketIOHandling)
+//  end;
 
   TIdServerWebSocketHandling = class(TIdServerBaseHandling)
   protected
     class var FExitConnectedCheck: Boolean;
-    class procedure DoWSExecute(AThread: TIdContext;
-      ASocketIOHandler: TIdServerSocketIOHandling_Ext); virtual;
+    class procedure DoWSExecute(AThread: TIdContext); virtual;
     class procedure HandleWSMessage(AContext: TIdServerWSContext;
-      var AWSType: TWSDataType; ARequestStream, AResponseStream: TMemoryStream;
-      ASocketIOHandler: TIdServerSocketIOHandling_Ext); virtual;
+      var AWSType: TWSDataType; ARequestStream, AResponseStream: TMemoryStream); virtual;
   public
     class function ProcessServerCommandGet(AThread: TIdServerWSContext;
       const AConnectionEvents: TWebSocketConnectionEvents;
       ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean;
 
-    class function CurrentSocket: ISocketIOContext;
+//    class function CurrentSocket: ISocketIOContext;
     class property ExitConnectedCheck: Boolean read FExitConnectedCheck
       write FExitConnectedCheck;
   end;
 
+  TIdServerIOHandlerStack = class(TIdServerIOHandlerSocket)
+  protected
+    procedure InitComponent; override;
+  public
+    function MakeClientIOHandler(ATheThread:TIdYarn ): TIdIOHandler; override;
+  end;
+  TIdServerIOHandlerWebSocket = class(TIdServerIOHandlerStack, ISetWebSocketClosing)
+  protected
+    FOnWebSocketClosing: TOnWebSocketClosing;
+    procedure InitComponent; override;
+    procedure SetWebSocketClosing(const AValue: TOnWebSocketClosing);
+  public
+    function Accept(ASocket: TIdSocketHandle; AListenerThread: TIdThread;
+      AYarn: TIdYarn): TIdIOHandler; override;
+    function MakeClientIOHandler(ATheThread:TIdYarn): TIdIOHandler; override;
+  end;
 implementation
 
 uses
-  IdWebSocketConsts, IdIIOHandlerWebSocket, WSDebugger;
+  Journeyman.WebSocket.Consts,
+  Journeyman.WebSocket.Debugger;
 
 { TIdServerWebSocketHandling }
 
-class function TIdServerWebSocketHandling.CurrentSocket: ISocketIOContext;
-var
-  LThread: TIdThreadWithTask;
-  LContext: TIdServerWSContext;
-begin
-  if not (TThread.Current is TIdThreadWithTask) then
-    Exit(nil);
-  LThread  := TThread.Current as TIdThreadWithTask;
-  if not (LThread.Task is TIdServerWSContext) then
-    Exit(nil);
-  LContext := LThread.Task as TIdServerWSContext;
-  Result  := LContext.SocketIO.GetSocketIOContext(LContext);
-end;
+//class function TIdServerWebSocketHandling.CurrentSocket: ISocketIOContext;
+//var
+//  LThread: TIdThreadWithTask;
+//  LContext: TIdServerWSContext;
+//begin
+//  if not (TThread.Current is TIdThreadWithTask) then
+//    Exit(nil);
+//  LThread  := TThread.Current as TIdThreadWithTask;
+//  if not (LThread.Task is TIdServerWSContext) then
+//    Exit(nil);
+//  LContext := LThread.Task as TIdServerWSContext;
+//  Result  := LContext.SocketIO.GetSocketIOContext(LContext);
+//end;
 
-class procedure TIdServerWebSocketHandling.DoWSExecute(AThread: TIdContext;
-  ASocketIOHandler: TIdServerSocketIOHandling_Ext);
+class procedure TIdServerWebSocketHandling.DoWSExecute(AThread: TIdContext);
 var
   LStreamRequest, LStreamResponse: TMemoryStream;
   LWSCode: TWSDataCode;
   LWSType: TWSDataType;
   LContext: TIdServerWSContext;
+  LLastPingReceived, LLastPingSent, LLastPongReceived, LLastPongSent,
   LStart: TDateTime;
   LHandler: IIOHandlerWebSocket;
 begin
@@ -76,11 +96,11 @@ begin
       LHandler.BusyUpgrading := False;
     end;
     // initial connect
-    if LContext.IsSocketIO then
-    begin
-      Assert(ASocketIOHandler <> nil);
-      ASocketIOHandler.WriteConnect(LContext);
-    end;
+//    if LContext.IsSocketIO then
+//    begin
+//      Assert(ASocketIOHandler <> nil);
+//      ASocketIOHandler.WriteConnect(LContext);
+//    end;
     AThread.Connection.Socket.UseNagle := False;  // no 200ms delay!
 
     LStart := Now;
@@ -115,8 +135,16 @@ begin
           // ignore ping/pong messages
           if LWSCode in [wdcPing, wdcPong] then
           begin
-            if LWSCode = wdcPing then
+            case LWSCode of
+              wdcPing: begin
               LHandler.WriteData(nil, wdcPong);
+                LLastPingReceived := Now;
+                LLastPongSent := Now;
+              end;
+              wdcPong: begin
+                LLastPongReceived := Now;
+              end;
+            end;
             Continue;
           end;
 
@@ -124,7 +152,7 @@ begin
             LWSType := wdtText else
             LWSType := wdtBinary;
 
-          HandleWSMessage(LContext, LWSType, LStreamRequest, LStreamResponse, ASocketIOHandler);
+          HandleWSMessage(LContext, LWSType, LStreamRequest, LStreamResponse);
 
           // write result back (of the same type: text or bin)
           if LStreamResponse.Size > 0 then
@@ -135,6 +163,7 @@ begin
           end else
           begin
             LHandler.WriteData(nil, wdcPing);
+            LLastPingSent := Now;
           end;
         finally
           LStreamRequest.Free;
@@ -146,24 +175,14 @@ begin
       begin
         LStart := Now;
         // ping
-        if LContext.IsSocketIO then
-        begin
-          // context.SocketIOPingSend := True;
-          Assert(ASocketIOHandler <> nil);
-          ASocketIOHandler.WritePing(LContext);
-        end else
         begin
           LHandler.WriteData(nil, wdcPing);
         end;
+        LLastPingSent := Now;
       end;
 
     end;
   finally
-    if LContext.IsSocketIO then
-    begin
-      Assert(ASocketIOHandler <> nil);
-      ASocketIOHandler.WriteDisconnect(LContext);
-    end;
     LContext.IOHandler.Clear;
     AThread.Data := nil;
   end;
@@ -171,24 +190,15 @@ end;
 
 class procedure TIdServerWebSocketHandling.HandleWSMessage(
   AContext: TIdServerWSContext; var AWSType:TWSDataType;
-  ARequestStream, AResponseStream: TMemoryStream;
-  ASocketIOHandler: TIdServerSocketIOHandling_Ext);
+  ARequestStream, AResponseStream: TMemoryStream);
 begin
-  if AContext.IsSocketIO then
-  begin
-    ARequestStream.Position := 0;
-    Assert(ASocketIOHandler <> nil);
-    ASocketIOHandler.ProcessSocketIORequest(AContext, ARequestStream);
-  end
-  else if Assigned(AContext.OnCustomChannelExecute) then
+  if Assigned(AContext.OnCustomChannelExecute) then
     AContext.OnCustomChannelExecute(AContext, AWSType, ARequestStream, AResponseStream);
 end;
 
 class function TIdServerWebSocketHandling.ProcessServerCommandGet(
-  AThread: TIdServerWSContext;
-  const AConnectionEvents: TWebSocketConnectionEvents;
-  ARequestInfo: TIdHTTPRequestInfo;
-  AResponseInfo: TIdHTTPResponseInfo): Boolean;
+  AThread: TIdServerWSContext; const AConnectionEvents: TWebSocketConnectionEvents;
+  ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean;
 var
   Accept, LWasWebSocket: Boolean;
   LConnection, sValue, LSGuid: string;
@@ -240,31 +250,11 @@ begin
       LSGuid := GUIDToString(LGuid);
       AResponseInfo.ContentText  := LSGuid + ':15:10:websocket,xhr-polling';
       AResponseInfo.CloseConnection := False;
-      (AThread.SocketIO as TIdServerSocketIOHandling_Ext).NewConnection(AThread);
+      // (AThread.SocketIO as TIdServerSocketIOHandling_Ext).NewConnection(AThread);
       //(AThread.SocketIO as TIdServerSocketIOHandling_Ext).NewConnection(squid, AThread.Binding.PeerIP);
 
-      Result := True;  //handled
-    end
     //'/socket.io/1/xhr-polling/2129478544'
-    else if StartsText('/socket.io/1/xhr-polling/', ARequestInfo.Document) then
-    begin
-      AResponseInfo.ContentStream   := TMemoryStream.Create;
-      AResponseInfo.CloseConnection := False;
 
-      LSGuid := Copy(ARequestInfo.Document, 1 + Length('/socket.io/1/xhr-polling/'),
-        Length(ARequestInfo.Document));
-      var LCommandType := ARequestInfo.CommandType;
-      if LCommandType in [hcGET, hcPOST] then
-        begin
-          var LSocketIOHandlingExt := (AThread.SocketIO as TIdServerSocketIOHandling_Ext);
-          var LPostStream := ARequestInfo.PostStream;
-          case LCommandType of
-            hcGET: LSocketIOHandlingExt.ProcessSocketIO_XHR(LSGuid, LPostStream,
-              AResponseInfo.ContentStream);
-            hcPOST: LSocketIOHandlingExt.ProcessSocketIO_XHR(LSGuid, LPostStream,
-              nil);   //no response expected with POST!
-          end;
-        end;
       Result := True;  //handled
     end else
     begin
@@ -283,6 +273,7 @@ begin
         if not Accept then
           begin
             AResponseInfo.ContentText := 'Failed upgrade.';
+            AResponseInfo.ResponseNo  := CNoContent;
             Exit(False);
           end;
      end;
@@ -300,6 +291,7 @@ begin
           WSDebugger.OutputDebugString('Server', 'Invalid length');
           {$ENDIF}
           AResponseInfo.ContentText := 'Invalid length';
+          AResponseInfo.ResponseNo  := CNoContent;
           Exit(False); //invalid length
         end;
     end else
@@ -309,6 +301,7 @@ begin
       WSDebugger.OutputDebugString('Server', 'Aborting connection');
       {$ENDIF}
       AResponseInfo.ContentText := 'Key doesn''t exist';
+      AResponseInfo.ResponseNo  := CNoContent;
       Exit(False);
     end;
 
@@ -340,7 +333,7 @@ begin
 
     // Sec-WebSocket-Version: 13
     // "The value of this header field MUST be 13"
-    sValue := ARequestInfo.RawHeaders.Values[SWebSocketVersion];
+    sValue := Trim(ARequestInfo.RawHeaders.Values[SWebSocketVersion]);
     if (sValue <> '') then
     begin
       LContext.WebSocketVersion := StrToIntDef(sValue, 0);
@@ -364,6 +357,7 @@ begin
 
     LContext.WebSocketProtocol   := ARequestInfo.RawHeaders.Values[SWebSocketProtocol];
     LContext.WebSocketExtensions := ARequestInfo.RawHeaders.Values[SWebSocketExtensions];
+    LContext.Encoding            := ARequestInfo.AcceptEncoding;
 
     // Response
     (* HTTP/1.1 101 Switching Protocols
@@ -377,6 +371,8 @@ begin
     AResponseInfo.Connection         := SUpgrade;
     // Upgrade: websocket
     AResponseInfo.CustomHeaders.Values[SUpgrade] := SWebSocket;
+    if LContext.ServerSoftware <> '' then
+      AResponseInfo.CustomHeaders.Values[SServer] := LContext.ServerSoftware;
 
     // Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
     sValue := Trim(LContext.WebSocketKey) +  // ... "minus any leading and trailing whitespace"
@@ -400,6 +396,10 @@ begin
     // send response back
     LContext.IOHandler.InputBuffer.Clear;
     LContext.IOHandler.BusyUpgrading := True;
+    if Assigned(AConnectionEvents.OnBeforeSendHeaders) then
+      begin
+        AConnectionEvents.OnBeforeSendHeaders(LContext, AResponseInfo);
+      end;
     AResponseInfo.WriteHeader;
 
     // handle all WS communication in separate loop
@@ -413,7 +413,8 @@ begin
       LWasWebSocket := True;
       if Assigned(AConnectionEvents.ConnectedEvent) then
         AConnectionEvents.ConnectedEvent(AThread);
-      DoWSExecute(AThread, (LContext.SocketIO as TIdServerSocketIOHandling_Ext));
+      // WebSocket handling loop, runs forever until disconnection
+      DoWSExecute(AThread);
     except
       {$IF DEFINED(DEBUG_WS)}
       on E: Exception do
@@ -435,4 +436,43 @@ begin
   end;
 end;
 
+procedure TIdServerIOHandlerStack.InitComponent;
+begin
+  inherited InitComponent;
+  IOHandlerSocketClass := TIdIOHandlerStack;
+end;
+function TIdServerIOHandlerStack.MakeClientIOHandler(ATheThread:TIdYarn ): TIdIOHandler;
+begin
+  Result := IOHandlerSocketClass.Create(nil);
+end;
+function TIdServerIOHandlerWebSocket.Accept(ASocket: TIdSocketHandle;
+  AListenerThread: TIdThread; AYarn: TIdYarn): TIdIOHandler;
+begin
+  Result := inherited Accept(ASocket, AListenerThread, AYarn);
+  if Result <> nil then
+  begin
+    (Result as TIdIOHandlerWebSocket).IsServerSide := True; // server must not mask, only client
+    (Result as TIdIOHandlerWebSocket).UseNagle := False;
+  end;
+end;
+procedure TIdServerIOHandlerWebSocket.InitComponent;
+begin
+  inherited InitComponent;
+  IOHandlerSocketClass := TIdIOHandlerWebsocketServer;
+end;
+function TIdServerIOHandlerWebSocket.MakeClientIOHandler(
+  ATheThread: TIdYarn): TIdIOHandler;
+begin
+  Result := inherited MakeClientIOHandler(ATheThread);
+  if Result <> nil then
+  begin
+    (Result as TIdIOHandlerWebSocket).IsServerSide := True; // server must not mask, only client
+    (Result as TIdIOHandlerWebSocket).UseNagle := False;
+  end;
+end;
+procedure TIdServerIOHandlerWebSocket.SetWebSocketClosing(
+  const AValue: TOnWebSocketClosing);
+begin
+  FOnWebSocketClosing := AValue;
+end;
 end.

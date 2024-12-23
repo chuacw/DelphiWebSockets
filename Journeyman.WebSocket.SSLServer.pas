@@ -1,9 +1,9 @@
-unit IdWebSocketServerSSL;
+unit Journeyman.WebSocket.SSLServer;
 
 interface
 
 uses
-  IdWebSocketServer;
+  Journeyman.WebSocket.Server;
 
 type
   TIdWebSocketServerSSL = class(TIdWebSocketServer)
@@ -14,7 +14,8 @@ type
 implementation
 
 uses
-  IdServerIOHandlerWebsocket, IdServerIOHandlerWebSocketSSL;
+  Journeyman.WebSocket.Server.IOHandlers,
+  Journeyman.WebSocket.Server.SSLIOHandlers;
 
 { TIdWebSocketServerSSL }
 

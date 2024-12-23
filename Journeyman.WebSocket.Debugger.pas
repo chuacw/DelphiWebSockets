@@ -1,4 +1,4 @@
-unit WSDebugger;
+unit Journeyman.WebSocket.Debugger;
 
 interface
 
@@ -13,9 +13,12 @@ uses
 /// <summary>Helps in debugging. If WS_DEBUG is not defined, this is a NO-OP as
 /// all the code are IF DEFINED out.</summary>
 procedure OutputDebugString(const ARoleName, AMsg: string); overload; {$IF NOT DEFINED(WS_DEBUG)} inline; {$ENDIF}
+procedure OutputDebugString(const ARoleName, AFormatMsg: string;
+  const AArguments: array of const); overload;
 /// <summary>Helps in debugging. If WS_DEBUG is not defined, this is a NO-OP as
 /// all the code are IF DEFINED out.</summary>
 procedure OutputDebugString(const AMsg: string); overload;
+procedure OutputDebugString(const AFormatMsg: string; const AArguments: array of const); overload;
 procedure OutputDebugString(Number: Integer; Elapsed: Int64); overload;
 
 implementation
@@ -55,6 +58,14 @@ var
 {$ENDIF}
 end;
 
+procedure OutputDebugString(const ARoleName, AFormatMsg: string;
+  const AArguments: array of const);
+var
+  LMsg: string;
+begin
+  LMsg := Format(AFormatMsg, AArguments);
+  OutputDebugString(ARoleName, LMsg);
+end;
 procedure OutputDebugString(const AMsg: string);
 {$IF DEFINED(DEBUG)}
 var
@@ -77,6 +88,13 @@ begin
      end;
   {$ENDIF}
 {$ENDIF}
+end;
+procedure OutputDebugString(const AFormatMsg: string; const AArguments: array of const);
+var
+  LMsg: string;
+begin
+  LMsg := Format(AFormatMsg, AArguments);
+  OutputDebugString(LMsg);
 end;
 
 procedure OutputDebugString(Number: Integer; Elapsed: Int64);

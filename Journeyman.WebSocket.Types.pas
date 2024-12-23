@@ -1,4 +1,4 @@
-unit IdWebSocketTypes;
+unit Journeyman.WebSocket.Types;
 
 interface
 
@@ -22,10 +22,6 @@ type
   end;
 
   TOnWebSocketClosing = procedure (const AReason: string) of object;
-  ISetWebSocketClosing = interface
-    ['{7EB09E63-DF10-472E-8B1C-DAB7EAE2164E}']
-    procedure SetWebSocketClosing(const AValue: TOnWebSocketClosing);
-  end;
 
    TWSCriticalSection = System.SyncObjs.TCriticalSection;
 //  TWSCriticalSection = class
@@ -83,8 +79,8 @@ type
     class procedure RemoveInstance(aForced: Boolean = False);
   end;
 
-
-  EIdWebSocketException = class(EIdException);
+  TIdServerBaseHandling = class
+  end;
 
 implementation
 
@@ -92,7 +88,7 @@ uses
 {$IF DEFINED(MSWINOWS)}
   Winapi.Windows,
 {$ENDIF}
-  System.SysUtils, WSDebugger;
+  System.SysUtils, Journeyman.WebSocket.Debugger;
 
 var
   GUnitFinalized: Boolean = False;
@@ -187,7 +183,7 @@ end;
 
 procedure TIdWebSocketQueueThread.ProcessQueue;
 var
-  proc: TThreadProcedure;
+  LProc: TThreadProcedure;
 begin
   FTempThread := TThread.Current.ThreadID; // GetCurrentThreadId;
 
@@ -196,8 +192,8 @@ begin
     // copy
     while FEvents.Count > 0 do
     begin
-      proc := FEvents.Items[0];
-      FProcessing.Add(proc);
+      LProc := FEvents.Items[0];
+      FProcessing.Add(LProc);
       FEvents.Delete(0);
     end;
   finally
@@ -206,9 +202,9 @@ begin
 
   while FProcessing.Count > 0 do
   begin
-    proc := FProcessing.Items[0];
+    LProc := FProcessing.Items[0];
     FProcessing.Delete(0);
-    proc();
+    LProc();
   end;
 end;
 
@@ -249,7 +245,7 @@ begin
     try
       if FInstance = nil then
       begin
-        FInstance := Self.Create(True);
+        FInstance := Create(True);
         TThread.NameThreadForDebugging('WebSocket Write Thread', FInstance.ThreadID);
         FInstance.Start;
       end;
@@ -290,7 +286,7 @@ begin
     try
       if FInstance = nil then
       begin
-        FInstance := Self.Create(True);
+        FInstance := Create(True);
         FInstance.Start;
       end;
     finally
@@ -302,15 +298,15 @@ end;
 
 class procedure TIdWebSocketDispatchThread.RemoveInstance;
 var
-  o: TIdWebSocketDispatchThread;
+  LDispatchThread: TIdWebSocketDispatchThread;
 {$IF DEFINED(CHECKSPEED)}
   LStopwatch: TStopwatch;
 {$ENDIF}
 begin
   if FInstance <> nil then
   begin
-    o := FInstance;
-    o.Terminate;
+    LDispatchThread := FInstance;
+    LDispatchThread.Terminate;
     FInstance := nil;
 
     if aForced then
@@ -318,15 +314,15 @@ begin
 {$IF DEFINED(CHECKSPEED)}
       LStopwatch := TStopwatch.StartNew;
 {$ENDIF}
-      o.WaitFor;
-      o.Terminate;
+      LDispatchThread.WaitFor;
+      LDispatchThread.Terminate;
 {$IF DEFINED(CHECKSPEED)}
       LStopwatch.Stop;
       WSDebugger.OutputDebugString(10, LStopwatch.ElapsedMilliseconds);
 {$ENDIF}
     end;
-    o.WaitFor;
-    FreeAndNil(o);
+    LDispatchThread.WaitFor;
+    FreeAndNil(LDispatchThread);
   end;
 end;
 

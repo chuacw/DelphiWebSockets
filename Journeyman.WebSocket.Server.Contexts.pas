@@ -1,10 +1,12 @@
-unit IdServerWebSocketContext;
+unit Journeyman.WebSocket.Server.Contexts;
 interface
 
 uses
   System.Classes, System.StrUtils, IdContext, IdCustomTCPServer,
-  IdCustomHTTPServer, IdIOHandlerWebSocket, IdServerBaseHandling,
-  IdServerSocketIOHandling, IdWebSocketTypes, IdIIOHandlerWebSocket;
+  IdCustomHTTPServer,
+  Journeyman.WebSocket.IOHandlers,
+  Journeyman.WebSocket.Types,
+  Journeyman.WebSocket.Interfaces;
 
 type
   TIdServerWSContext = class;
@@ -18,9 +20,12 @@ type
   TWebSocketConnected    = procedure(const AContext: TIdServerWSContext) of object;
   TWebSocketDisconnected = procedure(const AContext: TIdServerWSContext) of object;
 
+  TOnBeforeSendHeaders = procedure(const AContext: TIdServerWSContext;
+    const AResponseInfo: TIdHTTPResponseInfo) of object;
   TWebSocketConnectionEvents = record
     ConnectedEvent: TWebSocketConnected;
     DisconnectedEvent: TWebSocketDisconnected;
+    OnBeforeSendHeaders: TOnBeforeSendHeaders;
   end;
 
   TIdServerWSContext = class(TIdServerContext)
@@ -36,28 +41,32 @@ type
     FWebSocketExtensions: string;
     FCookie: string;
     FClientIP: string;
+    FEncoding: string;
+    FServerSoftware: string;
     // FSocketIOPingSend: Boolean;
     FOnWebSocketUpgrade: TWebSocketUpgradeEvent;
     FOnCustomChannelExecute: TWebSocketChannelRequest;
-    FSocketIO: TIdServerSocketIOHandling;
+//    FSocketIO: TIdServerSocketIOHandling;
     FOnDestroy: TIdContextEvent;
     function GetClientIP: string;
   public
     function IOHandler: IIOHandlerWebSocket;
   public
     function IsSocketIO: Boolean;
-    property SocketIO: TIdServerSocketIOHandling read FSocketIO write FSocketIO;
+//    property SocketIO: TIdServerSocketIOHandling read FSocketIO write FSocketIO;
     property OnDestroy: TIdContextEvent read FOnDestroy write FOnDestroy;
   public
     destructor Destroy; override;
 
+    property Cookie      : string read FCookie write FCookie;
     property ClientIP    : string read GetClientIP write FClientIP;
+    property Host        : string read FHost write FHost;
+    property Origin      : string read FOrigin write FOrigin;
     property Path        : string read FPath write FPath;
     property Query       : string read FQuery write FQuery;
     property ResourceName: string read FResourceName write FResourceName;
-    property Host        : string read FHost write FHost;
-    property Origin      : string read FOrigin write FOrigin;
-    property Cookie      : string read FCookie write FCookie;
+    property Encoding    : string read FEncoding write FEncoding;
+    property ServerSoftware: string read FServerSoftware write FServerSoftware;
 
     property WebSocketKey       : string  read FWebSocketKey write FWebSocketKey;
     property WebSocketProtocol  : string  read FWebSocketProtocol write FWebSocketProtocol;
@@ -71,7 +80,8 @@ type
 implementation
 
 uses
-  IdIOHandlerWebSocketSSL, IdIOHandlerStack;
+  Journeyman.WebSocket.SSLIOHandlers,
+  IdIOHandlerStack;
 
 { TIdServerWSContext }
 
@@ -96,6 +106,8 @@ end;
 
 function TIdServerWSContext.IOHandler: IIOHandlerWebSocket;
 begin
+  if Connection = nil then
+    Exit(nil);
   Result := Connection.IOHandler as IIOHandlerWebSocket;
 end;
 

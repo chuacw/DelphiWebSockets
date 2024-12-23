@@ -1,4 +1,4 @@
-unit IdIOHandlerWebSocketSSL;
+unit Journeyman.WebSocket.SSLIOHandlers;
 {.$DEFINE DEBUG_WS}
 {$WARN SYMBOL_DEPRECATED OFF}
 {$WARN SYMBOL_PLATFORM OFF}
@@ -6,15 +6,15 @@ unit IdIOHandlerWebSocketSSL;
 // http://datatracker.ietf.org/doc/rfc6455/?include_text=1
 interface
 
-
 uses
   System.Classes, System.SyncObjs, System.Generics.Collections,
   IdIOHandlerStack, IdGlobal, IdException, IdBuffer, IdSSLOpenSSL,
-  IdSocketHandle, IdIIOHandlerWebSocket, IdWebSocketTypes, System.SysUtils;
+  IdSocketHandle,
+  Journeyman.WebSocket.Interfaces,
+  Journeyman.WebSocket.Types, System.SysUtils;
 
 type
 
-  EIdWebSocketHandleError = class(EIdSocketHandleError);
 
   {$IF CompilerVersion >= 26}   //XE5
   TIdTextEncoding = IIdTextEncoding;
@@ -146,15 +146,15 @@ type
 implementation
 
 uses
-  System.Math,
-  IdStream, IdStack, IdExceptionCore,
-  IdResourceStrings, IdResourceStringsCore, WSDebugger,
+  System.Math, IdStream, IdStack, IdExceptionCore,
+  IdResourceStrings, IdResourceStringsCore, Journeyman.WebSocket.Debugger,
 {$IF DEFINED(MSWINDOWS)}
   Winapi.Windows,
 {$ELSE}
   IdSSLOpenSSLHeaders, FMX.Platform,
 {$ENDIF}
-  System.IOUtils, System.DateUtils, IdStackConsts, IdWebSocketConsts;
+  System.IOUtils, System.DateUtils, IdStackConsts, Journeyman.WebSocket.Consts,
+  Journeyman.WebSocket.Exceptions;
 
 function BytesToStringRaw(const AValue: TIdBytes; aSize: Integer = -1): string;
 var
@@ -439,7 +439,7 @@ end;
 
 function TIdIOHandlerWebSocketSSL.GetConnected: Boolean;
 begin
-  Result := Self.Connected;
+  Result := Connected;
 end;
 
 function TIdIOHandlerWebSocketSSL.GetInputBuffer: TIdBuffer;
@@ -719,7 +719,7 @@ begin
       {$IFDEF DEBUG_WS}
       if DebugHook > 0 then
         OutputDebugString(PChar(Format('Send (non ws, TID:%d, P:%d): %s',
-          [TThread.Current.ThreadID, Self.Binding.PeerPort, BytesToStringRaw(ABuffer)])));
+          [TThread.Current.ThreadID, Binding.PeerPort, BytesToStringRaw(ABuffer)])));
       {$ENDIF}
       Result := inherited WriteDataToTarget(ABuffer, AOffset, ALength)
     end
@@ -729,7 +729,7 @@ begin
       {$IFDEF DEBUG_WS}
       if DebugHook > 0 then
         OutputDebugString(PChar(Format('Send (ws, TID:%d, P:%d): %s',
-          [TThread.Current.ThreadID, Self.Binding.PeerPort, BytesToStringRaw(data)])));
+          [TThread.Current.ThreadID, Binding.PeerPort, BytesToStringRaw(data)])));
 
       {$ENDIF}
       try
@@ -804,7 +804,7 @@ begin
       {$IFDEF DEBUG_WS}
       if DebugHook > 0 then
         OutputDebugString(PChar(Format('Received (non ws, TID:%d, P:%d): %s',
-          [TThread.Current.ThreadID, Self.Binding.PeerPort,
+          [TThread.Current.ThreadID, Binding.PeerPort,
             BytesToStringRaw(VBuffer, Result)])));
       {$ENDIF}
     end
@@ -817,7 +817,7 @@ begin
         {$IFDEF DEBUG_WS}
         if DebugHook > 0 then
           OutputDebugString(PChar(Format('Received (ws, TID:%d, P:%d): %s',
-            [TThread.Current.ThreadID, Self.Binding.PeerPort, BytesToStringRaw(VBuffer)])));
+            [TThread.Current.ThreadID, Binding.PeerPort, BytesToStringRaw(VBuffer)])));
         {$ENDIF}
 
         // first write the data code (text or binary, ping, pong)
