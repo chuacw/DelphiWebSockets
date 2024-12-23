@@ -4,10 +4,10 @@ interface
 uses
   System.Classes, System.StrUtils, System.SysUtils, System.DateUtils,
   IdCoderMIME, IdThread, IdContext, IdCustomHTTPServer,
-  {$IF CompilerVersion <= 21.0}  //D2010
+  {$IF CompilerVersion <= 21.0}  // D2010
   IdHashSHA1,
   {$ELSE}
-  IdHashSHA,                     //XE3 etc
+  IdHashSHA,                     // XE3 etc
   {$ENDIF}
   IdServerSocketIOHandling, IdSocketIOHandling, IdServerBaseHandling,
   IdServerWebSocketContext, IdIOHandlerWebSocket, IdWebSocketTypes;
@@ -69,13 +69,13 @@ begin
   try
     LContext := AThread as TIdServerWSContext;
     LHandler := LContext.IOHandler;
-    //todo: make separate function + do it after first real write (not header!)
+    // todo: make separate function + do it after first real write (not header!)
     if LHandler.BusyUpgrading then
     begin
       LHandler.IsWebSocket   := True;
       LHandler.BusyUpgrading := False;
     end;
-    //initial connect
+    // initial connect
     if LContext.IsSocketIO then
     begin
       Assert(ASocketIOHandler <> nil);
@@ -98,9 +98,9 @@ begin
         try
 
           LStreamRequest.Position := 0;
-          //first is the type: text or bin
+          // first is the type: text or bin
           LWSCode := TWSDataCode(LHandler.ReadUInt32);
-          //then the length + data = stream
+          // then the length + data = stream
           LHandler.ReadStream(LStreamRequest);
           LStreamRequest.Position := 0;
 
@@ -112,7 +112,7 @@ begin
               Break;
             end;
 
-          //ignore ping/pong messages
+          // ignore ping/pong messages
           if LWSCode in [wdcPing, wdcPong] then
           begin
             if LWSCode = wdcPing then
@@ -126,7 +126,7 @@ begin
 
           HandleWSMessage(LContext, LWSType, LStreamRequest, LStreamResponse, ASocketIOHandler);
 
-          //write result back (of the same type: text or bin)
+          // write result back (of the same type: text or bin)
           if LStreamResponse.Size > 0 then
           begin
             if LWSType = wdtText then
@@ -141,14 +141,14 @@ begin
           LStreamResponse.Free;
         end;
       end
-      //ping after 5s idle
+      // ping after 5s idle
       else if SecondsBetween(Now, LStart) > 5 then
       begin
         LStart := Now;
-        //ping
+        // ping
         if LContext.IsSocketIO then
         begin
-          //context.SocketIOPingSend := True;
+          // context.SocketIOPingSend := True;
           Assert(ASocketIOHandler <> nil);
           ASocketIOHandler.WritePing(LContext);
         end else
@@ -214,14 +214,14 @@ begin
      Upgrade: websocket
      Sec-WebSocket-Version: 13 *)
 
-  //Connection: Upgrade
+  // Connection: Upgrade
   LConnection := ARequestInfo.Connection;
   {$IF DEFINED(DEBUG_WS)}
   WSDebugger.OutputDebugString(Format('Connection string: "%s"', [LConnection]));
   {$ENDIF}
   if not ContainsText(LConnection, SUpgrade) then   //Firefox uses "keep-alive, Upgrade"
   begin
-    //initiele ondersteuning voor socket.io
+    // initiele ondersteuning voor socket.io
     if SameText(ARequestInfo.Document , '/socket.io/1/') then
     begin
       {
@@ -365,7 +365,7 @@ begin
     LContext.WebSocketProtocol   := ARequestInfo.RawHeaders.Values[SWebSocketProtocol];
     LContext.WebSocketExtensions := ARequestInfo.RawHeaders.Values[SWebSocketExtensions];
 
-    //Response
+    // Response
     (* HTTP/1.1 101 Switching Protocols
        Upgrade: websocket
        Connection: Upgrade
@@ -373,18 +373,18 @@ begin
     AResponseInfo.ResponseNo         := CSwitchingProtocols;
     AResponseInfo.ResponseText       := SSwitchingProtocols;
     AResponseInfo.CloseConnection    := False;
-    //Connection: Upgrade
+    // Connection: Upgrade
     AResponseInfo.Connection         := SUpgrade;
-    //Upgrade: websocket
+    // Upgrade: websocket
     AResponseInfo.CustomHeaders.Values[SUpgrade] := SWebSocket;
 
-    //Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
-    sValue := Trim(LContext.WebSocketKey) +  //... "minus any leading and trailing whitespace"
-              SWebSocketGUID;                //special GUID
+    // Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+    sValue := Trim(LContext.WebSocketKey) +  // ... "minus any leading and trailing whitespace"
+              SWebSocketGUID;                // special GUID
     LHash := TIdHashSHA1.Create;
     try
-      sValue := TIdEncoderMIME.EncodeBytes(                   //Base64
-                     LHash.HashString(sValue) );               //SHA1
+      sValue := TIdEncoderMIME.EncodeBytes(                   // Base64
+                     LHash.HashString(sValue) );              // SHA1
     finally
       LHash.Free;
     end;

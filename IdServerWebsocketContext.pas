@@ -47,7 +47,6 @@ type
   public
     function IsSocketIO: Boolean;
     property SocketIO: TIdServerSocketIOHandling read FSocketIO write FSocketIO;
-    //property SocketIO: TIdServerBaseHandling read FSocketIO write FSocketIO;
     property OnDestroy: TIdContextEvent read FOnDestroy write FOnDestroy;
   public
     destructor Destroy; override;
@@ -102,7 +101,7 @@ end;
 
 function TIdServerWSContext.IsSocketIO: Boolean;
 begin
-  //FDocument	= '/socket.io/1/websocket/13412152'
+  // FDocument	= '/socket.io/1/websocket/13412152'
   Result := StartsText('/socket.io/1/websocket/', FPath);
 end;
 

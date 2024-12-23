@@ -263,7 +263,7 @@ begin
 
       LHandler := LClient.IOHandler;
 
-      //valid?
+      // valid?
       if //not chn.Busy and    also take busy channels (will be ignored later),
       // otherwise we have to break/reset for each RO function execution
          (LHandler <> nil) and (LHandler.IsWebSocket) and
@@ -358,7 +358,7 @@ begin
     if LList = nil then
       Exit;
     try
-      //check for data for all channels
+      // check for data for all channels
       for I := 0 to LList.Count - 1 do
       begin
         if LList = nil then
@@ -403,7 +403,7 @@ begin
     finally
       if LList <> nil then
         FChannels.UnlockList;
-      //strmEvent.Free;
+      // strmEvent.Free;
     end;
     {$ENDREGION}
   end;

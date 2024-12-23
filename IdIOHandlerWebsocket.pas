@@ -16,7 +16,7 @@ type
   TIdIOHandlerWebSocket   = class;
   EIdWebSocketHandleError = class(EIdSocketHandleError);
 
-  {$IF CompilerVersion >= 26}   //XE5
+  {$IF CompilerVersion >= 26}   // XE5
   TIdTextEncoding = IIdTextEncoding;
   {$ENDIF}
 
@@ -70,7 +70,7 @@ type
     function ReadFrame(out aFIN, aRSV1, aRSV2, aRSV3: boolean; out aDataCode: TWSDataCode; out aData: TIdBytes): Integer;
     function ReadMessage(var aBuffer: TIdBytes; out aDataCode: TWSDataCode): Integer;
 
-    {$IF CompilerVersion >= 26}   //XE5
+    {$IF CompilerVersion >= 26}   // XE5
     function UTF8Encoding: IIdTextEncoding;
     {$ELSE}
     function UTF8Encoding: TEncoding;
@@ -107,7 +107,7 @@ type
     property  OnWebSocketClosing: TOnWebSocketClosing read FOnWebSocketClosing
       write FOnWebSocketClosing;
 
-    //text/string writes
+    // text/string writes
     procedure Write(const AOut: string; AEncoding: TIdTextEncoding = nil); overload; override;
     procedure WriteLn(const AOut: string; AEncoding: TIdTextEncoding = nil); overload; override;
     procedure WriteLnRFC(const AOut: string = ''; AEncoding: TIdTextEncoding = nil); override;
@@ -149,7 +149,6 @@ function BytesToStringRaw(const AValue: TIdBytes; aSize: Integer = -1): string;
 var
   i: Integer;
 begin
-  //SetLength(Result, Length(aValue));
   for i := 0 to High(AValue) do
   begin
     if (AValue[i] = 0) and (aSize < 0) then
@@ -174,7 +173,7 @@ begin
   FLock := TCriticalSection.Create;
   FSelectLock := TCriticalSection.Create;
   {$IFDEF WEBSOCKETSSL}
-  //SendBufferSize := 15 * 1024;
+  // SendBufferSize := 15 * 1024;
   {$ENDIF}
 end;
 
@@ -203,10 +202,10 @@ var
   LConnected: Boolean;
 begin
   try
-    //valid connection?
+    // valid connection?
     LConnected := Opened and SourceIsAvailable and not ClosedGracefully;
 
-    //no socket error? connection closed by software abort, connection reset by peer, etc
+    // no socket error? connection closed by software abort, connection reset by peer, etc
     try
       GStack.GetSocketOption(Binding.Handle, Id_SOL_SOCKET, SO_ERROR, iOptVal);
       LConnected := LConnected and (iOptVal = 0);
@@ -216,13 +215,13 @@ begin
 
     if LConnected and IsWebSocket then
     begin
-      //close message must be responded with a close message back
-      //or initiated with a close message
+      // close message must be responded with a close message back
+      // or initiated with a close message
       if not FCloseCodeSend then
       begin
         FCloseCodeSend  := True;
 
-        //we initiate the close? then write reason etc
+        // we initiate the close? then write reason etc
         if not Closing then
         begin
           SetLength(iaWriteBuffer, 2);
@@ -239,27 +238,27 @@ begin
         end
         else
         begin
-          //just send normal close response back
+          // just send normal close response back
           SetLength(iaWriteBuffer, 2);
           iaWriteBuffer[0] := Byte(C_FrameClose_Normal shr 8);
           iaWriteBuffer[1] := Byte(C_FrameClose_Normal);
         end;
 
-        WriteData(iaWriteBuffer, wdcClose);  //send close + code back
+        WriteData(iaWriteBuffer, wdcClose);  // send close + code back
       end;
 
-      //we did initiate the close? then wait (a little) for close response
+      // we did initiate the close? then wait (a little) for close response
       if not Closing then
       begin
         FClosing := True;
         CheckForDisconnect();
-        //wait till client respond with close message back
-        //but a pending message can be in the buffer, so process this too
+        // wait till client respond with close message back
+        // but a pending message can be in the buffer, so process this too
         while ReadFromSource(False{no disconnect error}, 1 * 1000, False) > 0 do ; //response within 1s?
       end;
     end;
   except
-    //ignore, it's possible that the client is disconnected already (crashed etc)
+    // ignore, it's possible that the client is disconnected already (crashed etc)
   end;
 
   IsWebSocket   := False;
@@ -367,7 +366,7 @@ end;
 
 function TIdIOHandlerWebSocket.HasData: Boolean;
 begin
-  //buffered data available? (more data from previous read)
+  // buffered data available? (more data from previous read)
   Result := (FWSInputBuffer.Size > 0) or not InputBufferIsEmpty;
 end;
 
@@ -665,7 +664,7 @@ function TIdIOHandlerWebSocket.ReadDataFromSource(
 var
   wscode: TWSDataCode;
 begin
-  //the first time something is read AFTER upgrading, we switch to WS
+  // the first time something is read AFTER upgrading, we switch to WS
   //(so partial writes can be done, till a read is done)
   if BusyUpgrading then
   begin
@@ -688,7 +687,7 @@ begin
     else
     begin
       try
-        //we wait till we have a full message here (can be fragmented in several frames)
+        // we wait till we have a full message here (can be fragmented in several frames)
         Result := ReadMessage(VBuffer, wscode);
 
         {$IFDEF DEBUG_WS}
@@ -697,20 +696,20 @@ begin
             [TThread.Current.ThreadID, Self.Binding.PeerPort, BytesToStringRaw(VBuffer)])));
         {$ENDIF}
 
-        //first write the data code (text or binary, ping, pong)
+        // first write the data code (text or binary, ping, pong)
         FInputBuffer.Write(LongWord(Ord(wscode)));
-        //we write message size here, vbuffer is written after this. This way we can use ReadStream to get 1 single message (in case multiple messages in FInputBuffer)
+        // we write message size here, vbuffer is written after this. This way we can use ReadStream to get 1 single message (in case multiple messages in FInputBuffer)
         if LargeStream then
           FInputBuffer.Write(Int64(Result))
         else
           FInputBuffer.Write(LongWord(Result))
       except
-        FClosedGracefully := True; //closed (but not gracefully?)
+        FClosedGracefully := True; // closed (but not gracefully?)
         raise;
       end;
     end;
   finally
-    Unlock;  //normal unlock (no double try finally)
+    Unlock;  // normal unlock (no double try finally)
   end;
 end;
 
@@ -734,14 +733,14 @@ begin
   FMessageStream.Clear;
 
   repeat
-    //read a single frame
+    // read a single frame
     iReadCount := ReadFrame(bFIN, bRSV1, bRSV2, bRSV3, lDataCode, iaReadBuffer);
     if (iReadCount > 0) or
        (lDataCode <> wdcNone) then
     begin
       Assert(Length(iaReadBuffer) = iReadCount);
 
-      //store client extension bits
+      // store client extension bits
       if Self.IsServerSide then
       begin
         ClientExtensionBits := [];
@@ -750,7 +749,7 @@ begin
         if bRSV3 then ClientExtensionBits := ClientExtensionBits + [webBit3];
       end;
 
-      //process frame
+      // process frame
       case lDataCode of
         wdcText, wdcBinary:
           begin
@@ -792,7 +791,7 @@ begin
         end;
         wdcPong:
         begin
-           //pong received, ignore;
+           // pong received, ignore;
           lFirstDataCode := lDataCode;
         end;
       end;
@@ -1057,7 +1056,7 @@ begin
     Assert(iDataLength > 0);
   end;
 
-  //"All frames sent from client to server must have this bit set to 1"
+  // "All frames sent from client to server must have this bit set to 1"
   if IsServerSide and not bHasMask then
     raise EIdWebSocketHandleError.Create('No mask supplied: mask is required for clients when sending data to server. Buffer = ' + FWSInputBuffer.AsString)
   else if not IsServerSide and bHasMask then
@@ -1071,9 +1070,9 @@ begin
     rMask.MaskAsBytes[2] := _GetByte;
     rMask.MaskAsBytes[3] := _GetByte;
   end;
-  //Payload data:  (x+y) bytes
+  // Payload data:  (x+y) bytes
   FWSInputBuffer.Remove(iInputPos);  //remove first couple of processed bytes (header)
-  //simple read?
+  // simple read?
   if not bHasMask then
     aData := _GetBytes(iDataLength)
   else

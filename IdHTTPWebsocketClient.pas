@@ -5,7 +5,7 @@ uses
   System.Classes,
   IdHTTP,
   System.Types,
-  IdHashSHA,                     //XE3 etc
+  IdHashSHA,                     // XE3 etc
   IdIOHandler,
   IdIOHandlerWebSocket,
   System.Net.Socket,
@@ -201,7 +201,7 @@ begin
   var LStreamEvent := TMemoryStream.Create;
   LStreamEvent.CopyFrom(aEvent, aEvent.Size);
 
-  //events during dispatch? channel is busy so offload event dispatching to different thread!
+  // events during dispatch? channel is busy so offload event dispatching to different thread!
   TIdWebSocketDispatchThread.Instance.QueueEvent(
     procedure
     begin
@@ -239,7 +239,7 @@ begin
       IOHandler.Connected then
     begin
       IOHandler.CheckForDisconnect(True{error}, True{ignore buffer, check real connection});
-      Result := True;  //ok if we reach here
+      Result := True;  // ok if we reach here
     end;
   except
     on E: Exception do
@@ -275,22 +275,14 @@ begin
       Exit;
     end;
 
-    //FHeartBeat.Enabled := True;
     if SocketIOCompatible and
        not FSocketIOConnectBusy then
     begin
-      //FSocketIOConnectBusy := True;
-      //try
-        // socket.io connects using HTTP, so no separate .Connect needed
-        // (only gives Connection closed gracefully exceptions because of new http command)
-        TryUpgradeToWebSocket;
-      //finally
-      //  FSocketIOConnectBusy := False;
-      //end;
+      TryUpgradeToWebSocket;
     end
     else
     begin
-      //clear inputbuffer, otherwise it can't connect :(
+      // clear inputbuffer, otherwise it can't connect :(
       if (IOHandler <> nil) then IOHandler.Clear;
       inherited Connect;
     end;
@@ -335,14 +327,6 @@ end;
 
 destructor TIdHTTPWebSocketClient.Destroy;
 begin
-//  tmr := FHeartBeat;
-//  FHeartBeat := nil;
-//  TThread.Queue(nil,    //otherwise free in other thread than created
-//    procedure
-//    begin
-      //FHeartBeat.Free;
-//      tmr.Free;
-//    end);
   try
     TThread.Current.NameThreadForDebugging('Locking instance for removal ' + TThread.Current.ThreadID.ToString);
     Lock;
@@ -394,11 +378,9 @@ begin
         IOHandler.IsWebSocket := False;
 
         inherited Disconnect(ANotifyPeer);
-        //clear buffer, other still "connected"
+        // clear buffer, other still "connected"
         IOHandler.Clear;
 
-        //IOHandler.Free;
-        //IOHandler := TIdIOHandlerWebSocket.Create(nil);
       finally
         IOHandler.Unlock;
       end;
@@ -471,8 +453,6 @@ begin
 
       Connect;
       Result := Connected;
-      //if Result then
-      //  Result := TryUpgradeToWebSocket     already done in connect
     except
       Result := False;
     end
@@ -596,7 +576,7 @@ begin
         LHandler.IsWebSocket := False;
 
         inherited Disconnect(ANotifyPeer);
-        //clear buffer, others still "connected"
+        // clear buffer, others still "connected"
         LHandler.Clear;
 
       finally
@@ -656,16 +636,16 @@ begin
       strmResponse.Clear;
 
       ReadTimeout := 5 * 1000;
-      //get initial handshake
+      // get initial handshake
       Post(LURL, strmResponse, strmResponse);
       if ResponseCode = 200 {OK} then
       begin
-        //if not Connected then  //reconnect
+        // if not Connected then  //reconnect
         //  Self.Connect;
         strmResponse.Position := 0;
-        //The body of the response should contain the session id (sid) given to the client,
-        //followed by the heartbeat timeout, the connection closing timeout, and the list of supported transports separated by :
-        //4d4f185e96a7b:15:10:websocket,xhr-polling
+        // The body of the response should contain the session id (sid) given to the client,
+        // followed by the heartbeat timeout, the connection closing timeout, and the list of supported transports separated by :
+        // 4d4f185e96a7b:15:10:websocket,xhr-polling
         with TStreamReader.Create(strmResponse) do
         try
           FSocketIOHandshakeResponse := ReadToEnd;
@@ -703,7 +683,7 @@ begin
     // Upgrade: websocket
     Request.CustomHeaders.AddValue(SUpgrade, SWebSocket);
 
-    //Sec-WebSocket-Key
+    // Sec-WebSocket-Key
     LKey := GenerateWebSocketKey;
 
     // base64 encoded
@@ -779,7 +759,7 @@ begin
       if LHandler.CheckForDataOnSource(ReadTimeout) then
       begin
         FHTTPProto.RetrieveHeaders(MaxHeaderLines);
-        //Response.RawHeaders.Text := IOHandler.InputBufferAsString();
+        // Response.RawHeaders.Text := IOHandler.InputBufferAsString();
         Response.ResponseText := Response.RawHeaders.Text;
       end;
     end else
@@ -831,10 +811,10 @@ begin
         Exit;
     end;
     // check handshake key
-    LResponseKey := Trim(LKey) +     //... "minus any leading and trailing whitespace"
-                    SWebSocketGUID;  //special GUID
-    LResponseKey := TIdEncoderMIME.EncodeBytes(                          //Base64
-                         FHash.HashString(LResponseKey) );               //SHA1
+    LResponseKey := Trim(LKey) +     // ... "minus any leading and trailing whitespace"
+                    SWebSocketGUID;  // special GUID
+    LResponseKey := TIdEncoderMIME.EncodeBytes(                          // Base64
+                         FHash.HashString(LResponseKey) );               // SHA1
     if not SameText(Response.RawHeaders.Values[SWebSocketAccept], LResponseKey) then
     begin
       AFailedReason := 'Invalid key handshake';
@@ -852,7 +832,7 @@ begin
     if SocketIOCompatible then
     begin
       FSocketIOContext := TSocketIOContext.Create(Self);
-      (FSocketIOContext as TSocketIOContext).ConnectSend := True;  //connect already send via url? GET /socket.io/1/websocket/9elrbEFqiimV29QAM6T-
+      (FSocketIOContext as TSocketIOContext).ConnectSend := True;  // connect already send via url? GET /socket.io/1/websocket/9elrbEFqiimV29QAM6T-
       FSocketIO.WriteConnect(FSocketIOContext as TSocketIOContext);
     end;
 

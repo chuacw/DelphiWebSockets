@@ -99,7 +99,7 @@ begin
     if LList.IndexOf(AChannel) >= 0 then
       Exit;
 
-    Assert(LList.Count < 64, 'Max 64 connections can be handled by one read thread!');  //due to restrictions of the "select" API
+    Assert(LList.Count < 64, 'Max 64 connections can be handled by one read thread!');  // due to restrictions of the "select" API
     LList.Add(AChannel);
 
     // trigger the "select" wait
@@ -136,7 +136,6 @@ end;
 procedure TIdWebSocketMultiReadThread.BreakSelectWait;
 {$IF DEFINED(MSWINDOWS)}
 var
-  //iResult: Integer;
   LAddr: TSockAddrIn6;
 {$ENDIF}
 begin
@@ -145,11 +144,11 @@ begin
     Exit;
 
   FillChar(LAddr, SizeOf(LAddr), 0);
-  //Id_IPv4
+  // Id_IPv4
   with PSOCKADDR(@LAddr)^ do
   begin
     sin_family := Id_PF_INET4;
-    //dummy address and port
+    // dummy address and port
     (GStack as TIdStackBSDBase).TranslateStringToTInAddr('0.0.0.0', sin_addr, Id_IPv4);
     sin_port := htons(1); // port 1
   end;
@@ -325,12 +324,12 @@ begin
         Continue;
 
       ws := chn.IOHandler;
-      //valid?
+      // valid?
       if (ws <> nil) and (ws.IsWebSocket) and (chn.Socket <> nil) and
          (chn.Socket.Binding <> nil) and (chn.Socket.Binding.Handle > 0) and
          (chn.Socket.Binding.Handle <> INVALID_SOCKET) then
         begin
-          //more than 10s nothing done? then send ping
+          // more than 10s nothing done? then send ping
           if SecondsBetween(Now, ws.LastPingTime) > 10 then
             if chn.CheckConnection then
               try
@@ -338,7 +337,7 @@ begin
               except
                 on E: Exception do
                   EM := E.Message;
-                //retry connect the next time?
+                // retry connect the next time?
               end;
         end else
       if not chn.Connected then
@@ -364,7 +363,7 @@ begin
   if Terminated then
     Exit;
 
-  //reconnect needed? (in background)
+  // reconnect needed? (in background)
   if FReconnectList <> nil then
     if FReconnectList.Count > 0 then
       begin
@@ -384,7 +383,7 @@ begin
               begin
                 chn := nil;
                 try
-                  //get first one
+                  // get first one
                   LListX := FReconnectList.LockList;
                   try
                     if LListX.Count <= 0 then
@@ -401,7 +400,7 @@ begin
                     FReconnectList.UnlockList;
                   end;
 
-                  //try reconnect
+                  // try reconnect
                   ws := chn.IOHandler as IIOHandlerWebSocket;
                   if ( (ws = nil) or
                        (SecondsBetween(Now, ws.LastActivityTime) >= 5) ) then
@@ -411,16 +410,15 @@ begin
                         begin
                           if ws <> nil then
                             ws.LastActivityTime := Now;
-                          //chn.ConnectTimeout  := 1000;
+                          // chn.ConnectTimeout  := 1000;
                           if (chn.Host <> '') and (chn.Port > 0) then
                             chn.TryUpgradeToWebSocket;
                         end;
                       except
-                        //just try
+                        // just try
                       end;
                     end;
 
-                  //remove from todo list
                   LListX := FReconnectList.LockList;
                   try
                     if LListX.Count > 0 then
@@ -467,8 +465,8 @@ begin
       if chn.NoAsyncRead then
         Continue;
 
-      //valid?
-      if //not chn.Busy and    also take busy channels (will be ignored later), otherwise we have to break/reset for each RO function execution
+      // valid?
+      if // not chn.Busy and    also take busy channels (will be ignored later), otherwise we have to break/reset for each RO function execution
          (chn.IOHandler <> nil) and
          (chn.IOHandler.IsWebSocket) and
          (chn.Socket <> nil) and
@@ -498,7 +496,7 @@ begin
 
 {$IF DEFINED(MSWINDOWS)}
 
-  //nothing to wait for? then sleep some time to prevent 100% CPU
+  // nothing to wait for? then sleep some time to prevent 100% CPU
   if iResult = 0 then
   begin
     // special helper socket to be able to stop "select" from waiting
@@ -556,7 +554,7 @@ begin
     if LList = nil then
       Exit;
     try
-      //check for data for all channels
+      // check for data for all channels
       for i := 0 to LList.Count - 1 do
       begin
         if LList = nil then
@@ -571,7 +569,7 @@ begin
           if (ws = nil) then
             Continue;
 
-          if ws.TryLock then     //IOHandler.Readable cannot be done during pending action!
+          if ws.TryLock then     // IOHandler.Readable cannot be done during pending action!
           try
             try
               chn.ReadAndProcessData;
@@ -581,7 +579,7 @@ begin
                 LList := nil;
                 FChannels.UnlockList;
                 chn.ResetChannel;
-                //raise;
+                // raise;
               end;
             end;
           finally
@@ -597,7 +595,7 @@ begin
     finally
       if LList <> nil then
         FChannels.UnlockList;
-      //strmEvent.Free;
+      // strmEvent.Free;
     end;
   end;
 end;

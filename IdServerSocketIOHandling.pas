@@ -136,7 +136,7 @@ begin
               ACallback(context, SO(AData), nil);
             end, AOnError);
       except
-        //try to send to others
+        // try to send to others
       end;
       Inc(Result);
     end;
@@ -155,7 +155,7 @@ begin
               ACallback(context, SO(AData), nil);
             end, AOnError);
       except
-        //try to send to others
+        // try to send to others
       end;
       Inc(Result);
     end;

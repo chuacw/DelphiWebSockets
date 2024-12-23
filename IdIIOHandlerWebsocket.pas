@@ -7,7 +7,7 @@ uses
   System.SysUtils;
 
 type
-  {$IF CompilerVersion >= 26}   //XE5
+  {$IF CompilerVersion >= 26}   // XE5
   TIdTextEncoding = IIdTextEncoding;
   {$ENDIF}
 

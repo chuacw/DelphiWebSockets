@@ -165,7 +165,7 @@ begin
       if FProcessing.Count > 0 then
         ProcessQueue;
     except
-      //continue
+      // continue
     end;
   end;
 end;

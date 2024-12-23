@@ -179,33 +179,6 @@ begin
   end;
 end;
 
-//{ TIOWSPayloadInfo }
-//
-//procedure TIOWSPayloadInfo.Initialize(iTextMode: Boolean; iPayloadLength: Cardinal);
-//begin
-//  PayloadLength := iPayloadLength;
-//  if iTextMode then
-//    DataCode := wdcText else
-//    DataCode := wdcBinary;
-//end;
-//
-//procedure TIOWSPayloadInfo.Clear;
-//begin
-//  PayloadLength := 0;
-//  DataCode := wdcBinary;
-//end;
-//
-//function TIOWSPayloadInfo.DecLength(AValue: Cardinal):boolean;
-//begin
-//  if PayloadLength >= AValue then
-//   begin
-//     PayloadLength := PayloadLength - AValue;
-//   end
-//   else PayloadLength := 0;
-//  DataCode := wdcContinuation;
-//  Result := PayloadLength = 0;
-//end;
-
 procedure TIdIOHandlerWebSocketSSL.Clear;
 begin
   FWSInputBuffer.Clear;

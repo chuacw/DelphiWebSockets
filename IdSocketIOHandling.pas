@@ -205,7 +205,7 @@ type
       FSocketIOMsgNr: Integer;
       FSocketIOEventCallback: TDictionary<Integer, TSocketIOCallback>;
       FSocketIOEventCallbackRef: TDictionary<Integer, TSocketIOCallbackRef>;
-      //FSocketIOEventPromises: TDictionary<Integer,TSocketIOPromise>;
+      // FSocketIOEventPromises: TDictionary<Integer,TSocketIOPromise>;
       FSocketIOErrorRef: TDictionary<Integer, TSocketIOError>;
 
     function  WriteConnect(const ASocket: ISocketIOContext): string; overload;
@@ -330,7 +330,7 @@ begin
   FSocketIOEventCallback     := TDictionary<Integer, TSocketIOCallback>.Create;
   FSocketIOEventCallbackRef  := TDictionary<Integer, TSocketIOCallbackRef>.Create;
   FSocketIOErrorRef          := TDictionary<Integer, TSocketIOError>.Create;
-  //FSocketIOEventPromises     := TDictionary<Integer,TSocketIOPromise>.Create;
+  // FSocketIOEventPromises     := TDictionary<Integer,TSocketIOPromise>.Create;
 end;
 
 function TIdBaseSocketIOHandling.ConnectionCount: Integer;
@@ -369,7 +369,7 @@ begin
   FSocketIOEventCallback.Free;
   FSocketIOEventCallbackRef.Free;
   FSocketIOErrorRef.Free;
-  //FSocketIOEventPromises.Free;
+  // FSocketIOEventPromises.Free;
 
   FOnEventList.Free;
   FOnConnectionList.Free;
@@ -456,7 +456,7 @@ begin
       if FConnectionsGUID.Items[squid] = ASocket then
       begin
         FConnectionsGUID.ExtractPair(squid);
-        // ASocket._Release; //use reference count? otherwise AV when used in TThread.Queue
+        // ASocket._Release; // use reference count? otherwise AV when used in TThread.Queue
       end;
     end;
 
@@ -605,7 +605,7 @@ procedure TIdBaseSocketIOHandling.ProcessCloseChannel(
   const ASocket: ISocketIOContext; const aChannel: string);
 begin
   if aChannel <> '' then
-    //todo: close channel
+    // todo: close channel
   else if (TSocketIOContext(ASocket).FContext <> nil) then
     TSocketIOContext(ASocket).FContext.Connection.Disconnect;
 end;
@@ -734,7 +734,7 @@ begin
 
   {$IFDEF SUPEROBJECT}
   finally
-//args.Free;
+// args.Free;
   json := nil;
   end;
   {$ENDIF}
@@ -746,11 +746,11 @@ begin
   with TSocketIOContext(ASocket) do
   begin
     if PingSend then
-      PingSend := False   //reset, client responded with 2:: heartbeat too
+      PingSend := False   // reset, client responded with 2:: heartbeat too
     else
     begin
-      PingSend := True;  //stop infinite ping response loops
-      WriteString(ASocket, aText);   //write same connect back, e.g. 2::
+      PingSend := True;  // stop infinite ping response loops
+      WriteString(ASocket, aText);   // write same connect back, e.g. 2::
     end;
   end;
 end;
@@ -816,9 +816,9 @@ begin
     if (Length(bytes) > 3) and
        (bytes[0] = 239) and (bytes[1] = 191) and (bytes[2] = 189) then
     begin
-      //io.parser.encodePayload(msgs)
-      //'\ufffd' + packet.length + '\ufffd'
-      //'?17?3:::singlemessage?52?5:4+::{"name":"registerScanner","args":["scanner1"]}'
+      // io.parser.encodePayload(msgs)
+      // '\ufffd' + packet.length + '\ufffd'
+      // '?17?3:::singlemessage?52?5:4+::{"name":"registerScanner","args":["scanner1"]}'
       while bytes <> nil do
       begin
         i := 3;
@@ -838,7 +838,7 @@ begin
         try
           ProcessSocketIORequest(socket, sdata);
         except
-          //next
+          // next
         end;
       end;
     end
@@ -875,7 +875,7 @@ end;
 
 procedure TIdBaseSocketIOHandling.Unlock;
 begin
-  //System.TMonitor.Exit(Self);
+  // System.TMonitor.Exit(Self);
   FLock.Leave;
 end;
 
@@ -962,18 +962,18 @@ begin
     schannel := __GetSocketIOPart(str, 2);
     ProcessCloseChannel(socket, schannel);
   end
-  //(1) Connect
-  //'1::' [path] [query]
+  // (1) Connect
+  // '1::' [path] [query]
   else if StartsStr('1:', str) then
   begin
-    //todo: add channel/room to authorized channel/room list
+    // todo: add channel/room to authorized channel/room list
     if not socket.ConnectSend then
-      WriteString(socket, str);     //write same connect back, e.g. 1::/chat
+      WriteString(socket, str);     // write same connect back, e.g. 1::/chat
   end
   //(2) Heartbeat
   else if StartsStr('2:', str) then
   begin
-    //todo: timer to disconnect client if no ping within time
+    // todo: timer to disconnect client if no ping within time
     ProcessHeatbeatRequest(socket, str);
   end
   //(3) Message (https://github.com/LearnBoost/socket.io-spec#3-message)
@@ -1408,8 +1408,6 @@ begin
         QueueData(aText);
         Result := aText;    //for xhr-polling the data must be send using responseinfo instead of direct write!
       end;
-      //else   //disconnected
-      //  Assert(False, 'disconnected');
     end;
   finally
     ASocket.Unlock;
@@ -1551,7 +1549,7 @@ begin
 
   FQueue.Add(aData);
 
-  //max 1000 items in queue (otherwise infinite mem leak possible?)
+  // max 1000 items in queue (otherwise infinite mem leak possible?)
   while FQueue.Count > 1000 do
     FQueue.Delete(0);
 
@@ -1679,7 +1677,6 @@ function TIdBaseSocketIOHandling.WriteConnect(const AContext: TIdContext): strin
 var
   socket: ISocketIOContext;
 begin
-  //if not FConnections.TryGetValue(AContext, socket) then
   socket := NewConnection(AContext);
   Result := WriteConnect(socket);
 end;
@@ -1726,7 +1723,7 @@ begin
   try
     isendcount := 0;
 
-    //note: client has single connection?
+    // note: client has single connection?
     for context in FConnections.Values do
     begin
       if context.IsDisconnected then
@@ -1784,7 +1781,7 @@ begin
   Lock;
   try
     isendcount := 0;
-    //note: client has single connection?
+    // note: client has single connection?
     for context in FConnections.Values do
     begin
       if context.IsDisconnected then
@@ -1800,7 +1797,7 @@ begin
       Inc(isendcount);
     end;
 
-    //todo: use multiple promises?
+    // todo: use multiple promises?
     if isendcount > 1 then
       raise EIdSocketIoUnhandledMessage.Create('Cannot emit synchronized to more than one connection!');
   finally
@@ -1819,7 +1816,7 @@ begin
   try
     isendcount := 0;
 
-    //note: client has single connection?
+    // note: client has single connection?
     for context in FConnections.Values do
     begin
       if context.IsDisconnected then
