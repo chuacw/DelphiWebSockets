@@ -1,6 +1,7 @@
 unit IdWebSocketServer;
 interface
 {$I wsdefines.pas}
+
 uses
   System.Classes, IdStreamVCL, IdGlobal, IdWinsock2, IdHTTPServer, IdContext,
   IdCustomHTTPServer, IdHTTPWebBrokerBridge, IdIOHandlerWebSocket,
@@ -83,6 +84,7 @@ type
   end;
 
 implementation
+
 uses
   System.SysUtils, WSDebugger, IdHTTPWebSocketClient;
 

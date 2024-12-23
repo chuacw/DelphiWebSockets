@@ -1,6 +1,7 @@
 unit Portable.WSMultiReadThread;
 
 interface
+
 uses
   WSMultiReadThread, IdStack, IdStackConsts;
 
@@ -28,12 +29,16 @@ type
   end;
 
 implementation
+
 {$WARN UNIT_PLATFORM OFF}
 uses
   IdStackBSDBase, IdGlobal, System.SysUtils,
   IdIIOHandlerWebSocket, System.DateUtils, IdWebSocketConsts,
-  {$IF DEFINED(MSWINDOWS)}Winapi.Windows,{$ENDIF}
-  {$IF DEFINED(POSIX)}Posix.Fcntl, Posix.Unistd, Posix.StrOpts,{$ENDIF}
+  {$IF DEFINED(MSWINDOWS)}
+    Winapi.Windows,
+  {$ELSEIF DEFINED(POSIX)}
+    Posix.Fcntl, Posix.Unistd, Posix.StrOpts,
+  {$ENDIF}
   System.Generics.Collections, IdHTTPWebSocketClient, IdWebSocketTypes,
   WSDebugger;
 

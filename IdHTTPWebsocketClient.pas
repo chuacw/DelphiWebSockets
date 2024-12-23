@@ -1,6 +1,7 @@
 unit IdHTTPWebSocketClient;
 interface
 {$I wsdefines.pas}
+
 uses
   System.Classes,
   IdHTTP,
@@ -153,13 +154,13 @@ type
   end;
 
 implementation
+
 uses
   IdCoderMIME, System.Math, IdException, IdStackConsts,
   IdStackBSDBase, IdGlobal,
 {$IF DEFINED(MSWINDOWS)}
   Winapi.Windows,
-{$ENDIF}
-{$IF DEFINED(POSIX)}
+{$ELSEIF DEFINED(POSIX)}
   Posix.SysSocket, Posix.Fcntl, FMX.Platform,
 {$ENDIF}
   System.StrUtils, System.DateUtils,

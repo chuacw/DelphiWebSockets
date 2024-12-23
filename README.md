@@ -1,7 +1,11 @@
-# DelphiWebsockets
-WebSockets and Socket.io for Delphi
+# Websockets
+WebSockets for Delphi
 
-Now includes SSL, a demo echo client, and echo server.
-Refactored types and constants, as well as allow header injection before starting the
-WebSocket connection.
-```
+- WebSockets over HTTPS and HTTP.
+- Proxy support
+- Multithreaded
+
+
+Chee Wee, Chua  
+Singapore, Singapore,
+23 Dec 2024.

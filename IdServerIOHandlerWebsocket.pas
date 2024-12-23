@@ -1,6 +1,7 @@
 unit IdServerIOHandlerWebSocket;
 interface
 {$I wsdefines.pas}
+
 uses
   System.Classes, IdServerIOHandlerStack, IdIOHandlerStack, IdGlobal,
   IdIOHandler, IdYarn, IdThread, IdSocketHandle, IdIOHandlerWebSocket,

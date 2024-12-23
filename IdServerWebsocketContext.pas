@@ -1,6 +1,7 @@
 unit IdServerWebSocketContext;
 interface
 {$I wsdefines.pas}
+
 uses
   System.Classes, System.StrUtils, IdContext, IdCustomTCPServer,
   IdCustomHTTPServer, IdIOHandlerWebSocket, IdServerBaseHandling,
@@ -70,6 +71,7 @@ type
   end;
 
 implementation
+
 uses
   IdIOHandlerWebSocketSSL, IdIOHandlerStack;
 

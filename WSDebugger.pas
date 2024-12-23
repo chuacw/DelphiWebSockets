@@ -1,6 +1,7 @@
 unit WSDebugger;
 
 interface
+
 {$IF DEFINED(DEBUG) OR DEFINED(DEBUG_WS) OR DEFINED(CHECKSPEED)}
 uses
   {$IF DEFINED(MSWINDOWS)}
@@ -18,6 +19,7 @@ procedure OutputDebugString(const AMsg: string); overload;
 procedure OutputDebugString(Number: Integer; Elapsed: Int64); overload;
 
 implementation
+
 uses
   System.Classes,
 {$IF DEFINED(ANDROID)}

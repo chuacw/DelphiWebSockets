@@ -1,6 +1,7 @@
 unit IdIIOHandlerWebSocket;
 
 interface
+
 uses
   System.Classes, IdGlobal, IdSocketHandle, IdBuffer, IdWebSocketTypes,
   System.SysUtils;

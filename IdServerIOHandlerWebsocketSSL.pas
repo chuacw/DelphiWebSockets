@@ -1,6 +1,7 @@
 unit IdServerIOHandlerWebSocketSSL;
 
 interface
+
 uses
   IdServerIOHandlerStack, IdIOHandlerWebSocketSSL, IdSocketHandle, IdThread,
   IdYarn, IdIOHandler, IdWebSocketTypes, IdIOHandlerWebsocket, IdSSLOpenSSL,
@@ -22,6 +23,7 @@ type
   end;
 
 implementation
+
 uses
   System.SysUtils;
 

@@ -6,6 +6,7 @@ unit IdIOHandlerWebSocket;
 //http://datatracker.ietf.org/doc/rfc6455/?include_text=1
 interface
 {$I wsdefines.pas}
+
 uses
   System.Classes, System.SyncObjs, System.Generics.Collections,
   IdIOHandlerStack, IdGlobal, IdException, IdBuffer, IdSSLOpenSSL,
@@ -134,6 +135,7 @@ type
   TIdBuffer_Ext = class(TIdBuffer);
 
 implementation
+
 uses
   System.Math,
 {$IF DEFINED(MSWINDOWS)}

@@ -1,6 +1,7 @@
 unit WSMultiReadThread;
 
 interface
+
 uses
   System.Classes, IdStackConsts,
   {$IF DEFINED(MSWINDOWS)}IdWinsock2,{$ENDIF}
@@ -66,9 +67,8 @@ type
     GMultiReadClass: TMultiReadClass;
   end;
 
-
-
 implementation
+
 uses
   IdStack, IdStackBSDBase, IdGlobal, System.SysUtils,
   IdIIOHandlerWebSocket, System.DateUtils,

@@ -1,6 +1,7 @@
 unit IdWebSocketConsts;
 
 interface
+
 uses
 {$IF DEFINED(MSWINDOWS)}
   IdWinSock2;

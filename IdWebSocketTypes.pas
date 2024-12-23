@@ -1,6 +1,7 @@
 unit IdWebSocketTypes;
 
 interface
+
 uses
   System.Classes, System.SyncObjs, System.Generics.Collections, IdException;
 
@@ -86,6 +87,7 @@ type
   EIdWebSocketException = class(EIdException);
 
 implementation
+
 uses
 {$IF DEFINED(MSWINOWS)}
   Winapi.Windows,

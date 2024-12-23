@@ -1,6 +1,7 @@
 unit IdWebSocketServerSSL;
 
 interface
+
 uses
   IdWebSocketServer;
 
@@ -11,6 +12,7 @@ type
   end;
 
 implementation
+
 uses
   IdServerIOHandlerWebsocket, IdServerIOHandlerWebSocketSSL;
 

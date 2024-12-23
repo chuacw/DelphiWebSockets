@@ -1,6 +1,7 @@
 unit IdSocketIOHandling;
 interface
 {$I wsdefines.pas}
+
 uses
   System.SyncObjs, System.SysUtils, System.StrUtils, System.Classes,
   System.Generics.Collections,
@@ -310,6 +311,7 @@ function SO(const S: string): string; inline;
 {$ENDIF}
 
 implementation
+
 uses
   IdServerWebSocketContext, IdHTTPWebSocketClient;
 

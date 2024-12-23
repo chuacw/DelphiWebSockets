@@ -1,6 +1,7 @@
 unit Portable.Threads;
 
 interface
+
 uses
 {$IF DEFINED(ANDROID)}
   FMX.Helpers.Android;

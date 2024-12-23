@@ -1,6 +1,7 @@
 unit IdServerWebSocketHandling;
 interface
 {$I wsdefines.pas}
+
 uses
   System.Classes, System.StrUtils, System.SysUtils, System.DateUtils,
   IdCoderMIME, IdThread, IdContext, IdCustomHTTPServer,
@@ -35,6 +36,7 @@ type
   end;
 
 implementation
+
 uses
   IdWebSocketConsts, IdIIOHandlerWebSocket, WSDebugger;
 
