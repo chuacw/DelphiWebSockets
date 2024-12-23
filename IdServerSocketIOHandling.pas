@@ -1,6 +1,5 @@
 unit IdServerSocketIOHandling;
 interface
-{$I wsdefines.pas}
 
 uses
   Classes, Generics.Collections, SysUtils, StrUtils

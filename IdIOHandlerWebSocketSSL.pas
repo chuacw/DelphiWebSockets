@@ -2,10 +2,10 @@ unit IdIOHandlerWebSocketSSL;
 {.$DEFINE DEBUG_WS}
 {$WARN SYMBOL_DEPRECATED OFF}
 {$WARN SYMBOL_PLATFORM OFF}
-//The WebSocket Protocol, RFC 6455
-//http://datatracker.ietf.org/doc/rfc6455/?include_text=1
+// The WebSocket Protocol, RFC 6455
+// http://datatracker.ietf.org/doc/rfc6455/?include_text=1
 interface
-{$I wsdefines.pas}
+
 
 uses
   System.Classes, System.SyncObjs, System.Generics.Collections,

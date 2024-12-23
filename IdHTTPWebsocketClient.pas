@@ -1,6 +1,5 @@
 unit IdHTTPWebSocketClient;
 interface
-{$I wsdefines.pas}
 
 uses
   System.Classes,

@@ -1,6 +1,5 @@
 unit IdServerWebSocketContext;
 interface
-{$I wsdefines.pas}
 
 uses
   System.Classes, System.StrUtils, IdContext, IdCustomTCPServer,

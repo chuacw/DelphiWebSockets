@@ -1,20 +1,13 @@
 unit IdSocketIOHandling;
 interface
-{$I wsdefines.pas}
 
 uses
   System.SyncObjs, System.SysUtils, System.StrUtils, System.Classes,
   System.Generics.Collections,
-  {$IFDEF SUPEROBJECT}
-  , superobject
-  {$ENDIF}
   IdContext, IdException, IdHTTP, IdServerBaseHandling,
   IdIOHandlerWebSocket, IdIIOHandlerWebSocket;
 
 type
-  {$IFNDEF SUPEROBJECT}
-  TSuperArray = String;
-  {$ENDIF}
 
   TSocketIOContext = class;
   TSocketIOCallbackObj = class;
