@@ -22,6 +22,9 @@ type
     FReadTimeout: Integer;
     FTempHandle: TIdStackSocketHandle;
     FPendingBreak: Boolean;
+{$IF DEFINED(POSIX)}
+    FPosixWritePipe: TIdStackSocketHandle;
+{$ENDIF}
 {$IF DEFINED(MSWINDOWS)}
     FReadSet, FExceptionSet: IdWinsock2.TFDSet;
     Finterval: TTimeVal;
@@ -55,6 +58,7 @@ type
 
     procedure AddClient   (AChannel: TIdHTTPWebSocketClient);
     procedure RemoveClient(AChannel: TIdHTTPWebSocketClient);
+    function CanAdd: Boolean;
 
     property Count: Integer read GetCount;
     property ReadTimeout: Integer read FReadTimeout write FReadTimeout default 5000;
@@ -80,7 +84,7 @@ uses
 {$ELSE}
   FMX.Platform,
 {$ENDIF}
-  Journeyman.WebSocket.Debugger;
+  Journeyman.WebSocket.DebugUtils;
 
 var
   GUnitFinalized: Boolean = false;
@@ -102,7 +106,7 @@ begin
     if LList.IndexOf(AChannel) >= 0 then
       Exit;
 
-    Assert(LList.Count < 64, 'Max 64 connections can be handled by one read thread!');  //due to restrictions of the "select" API
+    Assert(LList.Count <= 64, 'Max 64 connections can be handled by one read thread!');  // due to restrictions of the "select" API
     LList.Add(AChannel);
 
     // trigger the "select" wait
@@ -122,6 +126,10 @@ begin
   FChannels := TThreadList<TIdHTTPWebSocketClient>.Create;
   InitComponents;
   InitSpecialEventSocket;
+end;
+function TIdWebSocketMultiReadThread.CanAdd: Boolean;
+begin
+  Result := Count < 64;
 end;
 
 procedure TIdWebSocketMultiReadThread.InitComponents;
@@ -160,7 +168,7 @@ begin
   FPendingBreak := True;
 
   {$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString('Windows Breaking SelectWait');
+  OutputDebugString('Windows Breaking SelectWait');
   {$ENDIF}
 //  connect to non-existing address to stop "select" from waiting
 //  Note: this is some kind of "hack" because there is no nice way to stop it
@@ -311,7 +319,7 @@ var
   EM: string;
 begin
   {$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString('PingAllChannels');
+  OutputDebugString('PingAllChannels');
   {$ENDIF}
   if Terminated then
     Exit;
@@ -319,7 +327,7 @@ begin
   LList := FChannels.LockList;
   try
     {$IF DEFINED(DEBUG_WS)}
-    WSDebugger.OutputDebugString('Ping', 'Channels count: '+LList.Count.ToString);
+    OutputDebugString('Ping', 'Channels count: '+LList.Count.ToString);
     {$ENDIF}
     for i := 0 to LList.Count - 1 do
     begin
@@ -453,7 +461,7 @@ var
   ws: IIOHandlerWebSocket;
 begin
   {$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString('ReadFromAllChannels');
+  OutputDebugString('ReadFromAllChannels');
   {$ENDIF}
   LList := FChannels.LockList;
   try
@@ -476,7 +484,6 @@ begin
          (chn.IOHandler.IsWebSocket) and
          (chn.Socket <> nil) and
          (chn.Socket.Binding <> nil) and
-         (chn.Socket.Binding.Handle > 0) and
          (chn.Socket.Binding.Handle <> INVALID_SOCKET) then
       begin
         if chn.IOHandler.HasData then
@@ -531,10 +538,10 @@ begin
     var LStopped := Now;
     if MilliSecondsBetween(LStopped, LStart) < ReadTimeout then
       begin
-        WSDebugger.OutputDebugString('Select Broken before Timeout');
+        OutputDebugString('Select Broken before Timeout');
       end else
       begin
-        WSDebugger.OutputDebugString('Select Broken ON Timeout');
+        OutputDebugString('Select Broken ON Timeout');
       end;
     {$ENDIF}
 
@@ -600,7 +607,6 @@ begin
     finally
       if LList <> nil then
         FChannels.UnlockList;
-      // strmEvent.Free;
     end;
   end;
 end;

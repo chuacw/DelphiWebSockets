@@ -26,11 +26,27 @@ const
   SWebSocketKey: string        = 'Sec-WebSocket-Key';
   SWebSocketProtocol: string   = 'Sec-WebSocket-Protocol';
   SWebSocketVersion: string    = 'Sec-WebSocket-Version';
+  SPerMessageDeflate: string   = 'permessage-deflate';
+  SClientMaxWindowBits: string = 'client_max_window_bits';
 
   CSwitchingProtocols: Int16   = 101;
   CNoContent: Int16            = 204;
   MSG_OOB                      = $01;                  // Process out-of-band data.
 
+type
+  TClientMaxWindowBits = record
+  const
+    Disabled = -1;
+    MinValue = 8;
+    MaxValue = 15;
+  end;
+  TServerMaxWindowBits = record
+  const
+    Disabled = -1;
+    MinValue = 8;
+    MaxValue = 15;
+  end;
+const
 {$IF DEFINED(MSWINDOWS)}
   SIZE_INTEGER = IdWinSock2.SIZE_INTEGER;
 {$ELSEIF DEFINED(ANDROID)}

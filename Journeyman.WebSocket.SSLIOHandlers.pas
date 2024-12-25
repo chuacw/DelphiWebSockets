@@ -9,8 +9,7 @@ interface
 uses
   System.Classes, System.SyncObjs, System.Generics.Collections,
   IdIOHandlerStack, IdGlobal, IdException, IdBuffer, IdSSLOpenSSL,
-  IdSocketHandle,
-  Journeyman.WebSocket.Interfaces,
+  IdSocketHandle, Journeyman.WebSocket.Interfaces,
   Journeyman.WebSocket.Types, System.SysUtils;
 
 type
@@ -143,16 +142,23 @@ type
 
   TIdBuffer_Ext = class(TIdBuffer);
 
+{$IF NOT DEFINED(MSWINDOWS)}
+procedure SetSSLLibPath(const ASSLLibPath: string = '');
+{$ENDIF}
 implementation
 
 uses
+{$IF DEFINED(ANDROID)}
+  FMX.Platform.Logger.Android.Fix,
+{$ENDIF}
   System.Math, IdStream, IdStack, IdExceptionCore,
-  IdResourceStrings, IdResourceStringsCore, Journeyman.WebSocket.Debugger,
+  IdResourceStrings, IdResourceStringsCore,
 {$IF DEFINED(MSWINDOWS)}
   Winapi.Windows,
 {$ELSE}
   IdSSLOpenSSLHeaders, FMX.Platform,
 {$ENDIF}
+  Journeyman.WebSocket.DebugUtils,
   System.IOUtils, System.DateUtils, IdStackConsts, Journeyman.WebSocket.Consts,
   Journeyman.WebSocket.Exceptions;
 
@@ -237,16 +243,16 @@ begin
       if not FCloseCodeSend then
       begin
         FCloseCodeSend  := True;
-{$IF DEFINED(DEBUG_WS)}
-        WSDebugger.OutputDebugString(RoleName, 'FCloseReceived: ' + FCloseReceived.ToString(TUseBoolStrs.True));
+{$IF DECLARED(Journeyman.WebSocket.DebugUtils)}
+        Journeyman.WebSocket.DebugUtils.OutputDebugString(RoleName, 'FCloseReceived: ' + FCloseReceived.ToString(TUseBoolStrs.True));
 {$ENDIF}
         // we initiate the close? then write reason etc
         // we didn't receive the close, so send out our reason
         if not FClosing then
         begin
           // the first party that sends the close enters this code
-{$IF DEFINED(DEBUG_WS)}
-          WSDebugger.OutputDebugString(RoleName, 'Closing');
+{$IF DECLARED(Journeyman.WebSocket.DebugUtils)}
+          Journeyman.WebSocket.DebugUtils.OutputDebugString(RoleName, 'Closing');
 {$ENDIF}
           LBufferLen := 2;
           if CloseReason <> '' then
@@ -258,8 +264,8 @@ begin
               LReason := UTF8String(Format('%s - doesn''t wanna talk', [RoleName]));
               Inc(LBufferLen, Length(LReason));
             end;
-{$IF DEFINED(DEBUG_WS)}
-          WSDebugger.OutputDebugString(RoleName, Format('reason: "%s"', [LReason]));
+{$IF DECLARED(Journeyman.WebSocket.DebugUtils)}
+          OutputDebugString(RoleName, Format('reason: "%s"', [LReason]));
 {$ENDIF}
           SetLength(LWriteBuffer, LBufferLen);
           if CloseCode < C_FrameClose_Normal then
@@ -274,15 +280,15 @@ begin
         begin
           // we received the close from the other party, so just send back ok...
           // just send normal close response back
-{$IF DEFINED(DEBUG_WS)}
+{$IF DECLARED(OutputDebugString)}
           var LMsg := Format('Thread %s sending response to close...', [TThread.Current.ThreadID.ToString]);
-          WSDebugger.OutputDebugString(RoleName, LMsg);
+          OutputDebugString(RoleName, LMsg);
 {$ENDIF}
           LBufferLen := 2;
           LReason := UTF8String(Format('%s - ok', [RoleName]));
           Inc(LBufferLen, Length(LReason));
-{$IF DEFINED(DEBUG_WS)}
-          WSDebugger.OutputDebugString(RoleName, Format('reason: "%s"', [LReason]));
+{$IF DECLARED(OutputDebugString)}
+          OutputDebugString(RoleName, Format('reason: "%s"', [LReason]));
 {$ENDIF}
           SetLength(LWriteBuffer, LBufferLen);
           LWriteBuffer[0] := Byte(C_FrameClose_Normal shr 8);
@@ -295,25 +301,25 @@ begin
 
         WriteData(LWriteBuffer, wdcClose);  //send close + code back
         WriteBufferFlush;
-{$IF DEFINED(DEBUG_WS)}
-        WSDebugger.OutputDebugString(RoleName, 'Close sent!');
+{$IF DECLARED(OutputDebugString)}
+        OutputDebugString(RoleName, 'Close sent!');
 {$ENDIF}
       end;
 
-{$IF DEFINED(DEBUG_WS)}
-      WSDebugger.OutputDebugString(Format('%s ConnectTimeout: %d ReadTimeout: %d SingleWriteThread: %s',
+{$IF DECLARED(OutputDebugString)}
+      OutputDebugString(Format('%s ConnectTimeout: %d ReadTimeout: %d SingleWriteThread: %s',
         [RoleName, ConnectTimeout, ReadTimeout, BoolToStr(UseSingleWriteThread, True)]));
 
       // we did initiate the close? then wait (a little) for close response
-      WSDebugger.OutputDebugString(RoleName, 'Closing: ' + BoolToStr(Closing, True));
+      OutputDebugString(RoleName, 'Closing: ' + BoolToStr(Closing, True));
 {$ENDIF}
       // not Closing = we initiated the close
       // so, wait for the other party to send their close response...
       if not FClosing then
         begin
-{$IF DEFINED(DEBUG_WS)}
+{$IF DECLARED(OutputDebugString)}
           var LMsg := Format('Thread %s waiting for response...', [TThread.Current.ThreadID.ToString]);
-          WSDebugger.OutputDebugString(RoleName, LMsg);
+          OutputDebugString(RoleName, LMsg);
           var LoopCount := 0;
 {$ENDIF}
           CheckForDisconnect();
@@ -329,33 +335,33 @@ begin
               except
                 on E: Exception do
                   begin
-{$IF DEFINED(DEBUG_WS)}
-                    WSDebugger.OutputDebugString(Format('LClose1Exception %s', [E.Message]));
+{$IF DECLARED(OutputDebugString)}
+                    OutputDebugString(Format('LClose1Exception %s', [E.Message]));
 {$ENDIF}
                     FClosedGracefully := True;
                   end;
               end;
               if FCloseReceived then
                 Break;
-{$IF DEFINED(DEBUG_WS)}
+{$IF DECLARED(OutputDebugString)}
               Inc(LoopCount);
 {$ENDIF}
             end;
-{$IF DEFINED(DEBUG_WS)}
-          WSDebugger.OutputDebugString(RoleName, 'CloseResponse received - '+FCloseReceived.ToString(TUseBoolStrs.True));
-          WSDebugger.OutputDebugString('LoopCount is: '+LoopCount.ToString);
+{$IF DECLARED(OutputDebugString)}
+          OutputDebugString(RoleName, 'CloseResponse received - '+FCloseReceived.ToString(TUseBoolStrs.True));
+          OutputDebugString('LoopCount is: '+LoopCount.ToString);
 {$ENDIF}
         end;
       InputBuffer.Clear; // Otherwise, Connected (up in ancestor) will return true...
-{$IF DEFINED(DEBUG_WS)}
-      WSDebugger.OutputDebugString(RoleName, 'if not Closing done');
+{$IF DECLARED(OutputDebugString)}
+      OutputDebugString(RoleName, 'if not Closing done');
 {$ENDIF}
     end;
   except
     // ignore, it's possible that the client is disconnected already (crashed etc)
-{$IF DEFINED(DEBUG_WS)}
+{$IF DECLARED(OutputDebugString)}
     on E: Exception do
-      WSDebugger.OutputDebugString(RoleName, 'exception: ' + E.Message);
+      OutputDebugString(RoleName, 'exception: ' + E.Message);
 {$ENDIF}
   end;
 
@@ -364,8 +370,8 @@ begin
   try
     inherited Close;
   except
-{$IF DEFINED(DEBUG_WS)}
-    WSDebugger.OutputDebugString('LClose2Exception');
+{$IF DECLARED(OutputDebugString)}
+    OutputDebugString('LClose2Exception');
 {$ENDIF}
   end;
 end;
@@ -946,7 +952,7 @@ begin
       FMessageStream.Position := 0;
       TIdStreamHelper.ReadBytes(FMessageStream, aBuffer);
       Result    := FMessageStream.Size;
-      aDataCode := lFirstDataCode
+      aDataCode := lFirstDataCode;
     end
     else if (lFirstDataCode in [wdcPing, wdcPong]) then
     begin
@@ -1030,8 +1036,8 @@ end;
 
 procedure TIdIOHandlerWebSocketSSL.NotifyClosing;
 begin
-{$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString(RoleName, 'TIdIOHandlerWebSocketSSL.NotifyClosing');
+{$IF DECLARED(OutputDebugString)}
+  OutputDebugString(RoleName, 'TIdIOHandlerWebSocketSSL.NotifyClosing');
 {$ENDIF}
   if Assigned(FOnNotifyClosing) then
     FOnNotifyClosing;
@@ -1401,12 +1407,23 @@ begin
 //  ConnectTimeout := 30000;
 end;
 
+{$IF DEFINED(ANDROID) OR DEFINED(LINUX)}
+procedure SetSSLLibPath(const ASSLLibPath: string = '');
+var
+  LSSLLibPath: string;
+begin
+  if ASSLLibPath <> '' then
+    LSSLLibPath := ASSLLibPath else // the same place where the app is located
+    LSSLLibPath := TPath.GetDocumentsPath;
+  IdOpenSSLSetLibPath(LSSLLibPath);
+end;
+{$ENDIF}
 initialization
 {$IF NOT DEFINED(MSWINDOWS)}
-  IdOpenSSLSetLibPath(TPath.GetDocumentsPath)
+  SetSSLLibPath;
 {$ENDIF}
 finalization
-{$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString('Finalized IdIOHandlerWebSocketSSL');
+{$IF DECLARED(OutputDebugString)}
+  OutputDebugString('Finalized IdIOHandlerWebSocketSSL');
 {$ENDIF}
 end.

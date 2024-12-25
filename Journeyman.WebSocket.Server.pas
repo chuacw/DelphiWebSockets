@@ -34,17 +34,14 @@ type
   {$ELSE}
   TIdWebSocketServer = class(TIdHTTPServer)
   {$ENDIF}
-  private
-//    FSocketIO: TIdServerSocketIOHandling_Ext;
+  protected
     FOnMessageText: TWebSocketMessageText;
     FOnMessageBin: TWebSocketMessageBin;
     FOnWebSocketClosing: TOnWebSocketClosing;
     FWriteTimeout: Integer;
     FConnectionEvents: TWebSocketConnectionEvents;
 
-//    function GetSocketIO: TIdServerSocketIOHandling;
     procedure SetWriteTimeout(const Value: Integer);
-  protected
     function WebSocketCommandGet(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean; virtual;
     procedure DoCommandGet(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo); override;
     procedure ContextCreated(AContext: TIdContext); override;
@@ -89,7 +86,6 @@ type
 
     property OnBeforeSendHeaders: TOnBeforeSendHeaders read FConnectionEvents.OnBeforeSendHeaders
       write FConnectionEvents.OnBeforeSendHeaders;
-//    property SocketIO: TIdServerSocketIOHandling read GetSocketIO;
   published
     property WriteTimeout: Integer read FWriteTimeout write SetWriteTimeout default 2000;
   end;
@@ -97,7 +93,7 @@ type
 implementation
 
 uses
-  System.SysUtils, Journeyman.WebSocket.Debugger, Journeyman.WebSocket.Client,
+  System.SysUtils, Journeyman.WebSocket.DebugUtils, Journeyman.WebSocket.Client,
   Journeyman.WebSocket.Consts;
 
 { TIdWebSocketServer }
@@ -106,13 +102,11 @@ procedure TIdWebSocketServer.AfterConstruction;
 begin
   inherited;
 
-//  FSocketIO := TIdServerSocketIOHandling_Ext.Create;
-
   ContextClass := TIdServerWSContext;
   if IOHandler = nil then
     IOHandler := TIdServerIOHandlerWebSocket.Create(Self);
 
-  FWriteTimeout := 2 * 1000;  //2s
+  FWriteTimeout := 2 * 1000;  // 2s
 end;
 
 procedure TIdWebSocketServer.ContextCreated(AContext: TIdContext);
@@ -167,7 +161,7 @@ begin
       except
         {$IF DEFINED(DEBUG_WS)}
         on E: Exception do
-          WSDebugger.OutputDebugString('Disconnect All: '+E.Message);
+            OutputDebugString('Disconnect All: '+E.Message);
         {$ENDIF}
       end;
     end;
@@ -204,14 +198,14 @@ begin
       LServerContext, FConnectionEvents, ARequestInfo, AResponseInfo);
 
     {$IF DEFINED(DEBUG_WS)}
-    WSDebugger.OutputDebugString('Completed ProcessServerCommandGet');
+    OutputDebugString('Completed ProcessServerCommandGet');
     {$ENDIF}
   except
   // chuacw fix, CloseConnection when return????
     on E: Exception do
       begin
         {$IF DEFINED(DEBUG_WS)}
-        WSDebugger.OutputDebugString('Exception in ProcessServerCommandGet: '+E.Message);
+        OutputDebugString('Exception in ProcessServerCommandGet: '+E.Message);
         {$ENDIF}
         SetIOHandler(nil);
       end;
@@ -327,17 +321,18 @@ end;
 procedure TIdWebSocketServer.WebSocketChannelRequest(
   const AContext: TIdServerWSContext; var aType: TWSDataType;
   const aStrmRequest, aStrmResponse: TMemoryStream);
-var s: string;
+var
+  LData: string;
 begin
   if aType = wdtText then
   begin
     with TStreamReader.Create(aStrmRequest) do
     begin
-      s := ReadToEnd;
+      LData := ReadToEnd;
       Free;
     end;
     if Assigned(OnMessageText) then
-      OnMessageText(AContext, s, aStrmResponse)
+      OnMessageText(AContext, LData, AStrmResponse)
   end
   else if Assigned(OnMessageBin) then
       OnMessageBin(AContext, aStrmRequest, aStrmResponse)

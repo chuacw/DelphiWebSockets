@@ -88,7 +88,7 @@ uses
 {$IF DEFINED(MSWINOWS)}
   Winapi.Windows,
 {$ENDIF}
-  System.SysUtils, Journeyman.WebSocket.Debugger;
+  System.SysUtils, Journeyman.WebSocket.DebugUtils;
 
 var
   GUnitFinalized: Boolean = False;
@@ -318,7 +318,7 @@ begin
       LDispatchThread.Terminate;
 {$IF DEFINED(CHECKSPEED)}
       LStopwatch.Stop;
-      WSDebugger.OutputDebugString(10, LStopwatch.ElapsedMilliseconds);
+      OutputDebugString(10, LStopwatch.ElapsedMilliseconds);
 {$ENDIF}
     end;
     LDispatchThread.WaitFor;

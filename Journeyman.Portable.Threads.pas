@@ -18,8 +18,8 @@ type
   TCallBack = System.Classes.TThreadProcedure;
 {$ENDIF} // System.Threading
 
-procedure CallInUIThread(const AMethod: TMethodCallback); overload;
-procedure CallInUIThread(const AMethod: TCallBack); overload;
+procedure CallInUIThread(const AMethod: TMethodCallback); overload; inline;
+procedure CallInUIThread(const AMethod: TCallBack); overload; inline;
 
 implementation
 

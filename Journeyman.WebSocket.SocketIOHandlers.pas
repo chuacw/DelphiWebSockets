@@ -256,7 +256,6 @@ type
       const ACallback: TSocketIOMsgJSON = nil;
       const AOnError: TSocketIOError = nil); overload;
   end deprecated 'Do not use';
-    // procedure Emit(const aEventName: string; const aData: string; const aCallback: TSocketIOMsgJSON = nil; const aOnError: TSocketIOError = nil); overload;
 
 {$IFNDEF SUPEROBJECT}
 function SO(const S: string): string; inline;
@@ -1537,22 +1536,6 @@ begin
   end;
 end;
 
-//{$IFDEF SUPEROBJECT}
-//procedure TSocketIOContext.SendJSON(const aJSON: ISuperObject;
-//  const aCallback: TSocketIOMsgJSON; const aOnError: TSocketIOError);
-//begin
-//  if not Assigned(aCallback) then
-//    FHandling.WriteSocketIOJSON(Self, '', aJSON.AsJSon())
-//  else
-//  begin
-//    FHandling.WriteSocketIOMsg(Self, '', aJSON.AsJSon(),
-//      procedure(const aData: string)
-//      begin
-//        aCallback(Self, SO(aData), nil);
-//      end, aOnError);
-//  end;
-//end;
-//{$ENDIF}
 procedure TSocketIOContext.ServerContextDestroy(AContext: TIdContext);
 begin
   Context    := nil;

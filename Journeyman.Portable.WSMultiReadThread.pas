@@ -17,6 +17,11 @@ type
     FConnectHandle, FListenHandle: TIdStackSocketHandle;
 
     procedure Disconnect(var AHandle: TIdStackSocketHandle); inline;
+{$ELSEIF DEFINED(POSIX)}
+    FPosixWritePipe: TIdStackSocketHandle;
+    FConnectIP: string;
+    FConnectHandle, FListenHandle: TIdStackSocketHandle;
+    procedure Disconnect(var AHandle: TIdStackSocketHandle); inline;
 {$ENDIF}
     procedure BreakSelectWait; override;
     procedure CloseSpecialEventSocket; override;
@@ -37,11 +42,14 @@ uses
   System.DateUtils, Journeyman.WebSocket.Consts,
   {$IF DEFINED(MSWINDOWS)}
     Winapi.Windows,
-  {$ELSEIF DEFINED(POSIX)}
+  {$ELSEIF DEFINED(LINUX64) OR DEFINED(POSIX)}
     Posix.Fcntl, Posix.Unistd, Posix.StrOpts,
+    {$IF DEFINED(LINUX64) OR DEFINED(LINUX)}
+      Linuxapi.KernelIoctl,
+    {$ENDIF}
   {$ENDIF}
   System.Generics.Collections, Journeyman.WebSocket.Client, Journeyman.WebSocket.Types,
-  Journeyman.WebSocket.Debugger;
+  Journeyman.WebSocket.DebugUtils;
 
 {$IF DEFINED(ANDROID)}
 type
@@ -67,6 +75,9 @@ begin
   Result := WSSend(ASocket, ABuffer[AOffset], Length(ABuffer), Flags);
 end;
 
+{$ENDIF}
+
+{$IF DEFINED(ANDROID) OR DEFINED(POSIX)}
 procedure TPortableMultiReadThread.Disconnect(var AHandle: TIdStackSocketHandle);
 begin
   if AHandle <> 0 then
@@ -79,6 +90,9 @@ end;
 
 procedure TPortableMultiReadThread.BreakSelectWait;
 begin
+// Test if this speeds up the 2s delay
+  Exit;
+// End test
   if FTempHandle = 0 then
     Exit;
 
@@ -92,7 +106,7 @@ begin
     MSG_OOB);
 
   {$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString('Socket', 'OOB data, no disconnection');
+  OutputDebugString('Socket', 'OOB data, no disconnection');
   {$ENDIF}
 
 {$ELSEIF DEFINED(POSIX)}
@@ -104,7 +118,7 @@ begin
   if (LIOCtlResult = 0) and (nRead = 0) then
     begin
       // Writes to the write pipe
-      FileWrite(FPosixWritePipe, @Dummy, SizeOf(Dummy));
+      FileWrite(FPosixWritePipe, Dummy, SizeOf(Dummy));
     end;
 {$ELSE}
 
@@ -122,13 +136,16 @@ begin
 //  errors will be included.
   try
     {$IF DEFINED(DEBUG_WS)}
-    WSDebugger.OutputDebugString('WSChat', 'Portable Breaking SelectWait');
+    OutputDebugString('WSChat', 'Portable Breaking SelectWait');
     {$ENDIF}
     // Hopefully nothing is listening on port 1
     GStack.Connect(FTempHandle, '0.0.0.0', 1, Id_IPv4);
   except
     on E: EIdSocketError do
-      ; // do nothing
+      begin
+        // Debug
+        OutputDebugString(E.Message);
+      end; // do nothing
   else
     raise;
   end;
@@ -245,12 +262,12 @@ var
   LHandler: IIOHandlerWebSocket;
 begin
   {$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString('ReadFromAllChannels');
+  OutputDebugString('ReadFromAllChannels');
   {$ENDIF}
   LList := FChannels.LockList;
   try
     {$IF DEFINED(DEBUG_WS)}
-    WSDebugger.OutputDebugString('ReadFromAllChannels, channel count: '+ LList.Count.ToString);
+    OutputDebugString('ReadFromAllChannels, channel count: '+ LList.Count.ToString);
     {$ENDIF}
     LWebSocketCount  := 0;
     LSelectorsHaveData := False;
@@ -332,10 +349,10 @@ begin
     var LStopped := Now;
     if MilliSecondsBetween(LStopped, LStart) < ReadTimeout then
       begin
-        WSDebugger.OutputDebugString('WSChat', 'Select Broken before Timeout');
+        OutputDebugString('WSChat', 'Select Broken before Timeout');
       end else
       begin
-        WSDebugger.OutputDebugString('WSChat', 'Select Broken ON Timeout');
+        OutputDebugString('WSChat', 'Select Broken ON Timeout');
       end;
     {$ENDIF}
 
@@ -404,7 +421,6 @@ begin
     finally
       if LList <> nil then
         FChannels.UnlockList;
-      // strmEvent.Free;
     end;
     {$ENDREGION}
   end;

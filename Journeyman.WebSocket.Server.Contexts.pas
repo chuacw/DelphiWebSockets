@@ -3,6 +3,7 @@ interface
 
 uses
   System.Classes, System.StrUtils, IdContext, IdCustomTCPServer,
+  IdTCPConnection, // TIdTCPConnection
   IdCustomHTTPServer,
   Journeyman.WebSocket.IOHandlers,
   Journeyman.WebSocket.Types,
@@ -48,6 +49,9 @@ type
     FOnCustomChannelExecute: TWebSocketChannelRequest;
 //    FSocketIO: TIdServerSocketIOHandling;
     FOnDestroy: TIdContextEvent;
+    FSupportsPerMessageDeflate: Boolean;
+    FClientMaxWindowBits: Integer;
+    FServerMaxWindowBits: Integer;
     function GetClientIP: string;
   public
     function IOHandler: IIOHandlerWebSocket;
@@ -56,6 +60,7 @@ type
 //    property SocketIO: TIdServerSocketIOHandling read FSocketIO write FSocketIO;
     property OnDestroy: TIdContextEvent read FOnDestroy write FOnDestroy;
   public
+    procedure AfterConstruction; override;
     destructor Destroy; override;
 
     property Cookie      : string read FCookie write FCookie;
@@ -68,11 +73,13 @@ type
     property Encoding    : string read FEncoding write FEncoding;
     property ServerSoftware: string read FServerSoftware write FServerSoftware;
 
+    property ClientMaxWindowBits: Integer read FClientMaxWindowBits write FClientMaxWindowBits;
+    property ServerMaxWindowBits: Integer read FServerMaxWindowBits write FServerMaxWindowBits;
+    property SupportsPerMessageDeflate: Boolean read FSupportsPerMessageDeflate write FSupportsPerMessageDeflate;
     property WebSocketKey       : string  read FWebSocketKey write FWebSocketKey;
     property WebSocketProtocol  : string  read FWebSocketProtocol write FWebSocketProtocol;
     property WebSocketVersion   : Integer read FWebSocketVersion write FWebSocketVersion;
     property WebSocketExtensions: string  read FWebSocketExtensions write FWebSocketExtensions;
-  public
     property OnWebSocketUpgrade: TWebSocketUpgradeEvent read FOnWebSocketUpgrade write FOnWebSocketUpgrade;
     property OnCustomChannelExecute: TWebSocketChannelRequest read FOnCustomChannelExecute write FOnCustomChannelExecute;
   end;
@@ -81,9 +88,15 @@ implementation
 
 uses
   Journeyman.WebSocket.SSLIOHandlers,
-  IdIOHandlerStack;
+  IdIOHandlerStack, Journeyman.WebSocket.Consts;
 
 { TIdServerWSContext }
+procedure TIdServerWSContext.AfterConstruction;
+begin
+  FClientMaxWindowBits := TClientMaxWindowBits.Disabled;
+  FServerMaxWindowBits := TServerMaxWindowBits.Disabled;
+  FSupportsPerMessageDeflate := False;
+end;
 
 destructor TIdServerWSContext.Destroy;
 begin

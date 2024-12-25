@@ -1,4 +1,4 @@
-unit Journeyman.WebSocket.Debugger;
+unit Journeyman.WebSocket.DebugUtils;
 
 interface
 
@@ -43,8 +43,7 @@ var
   {$IF DEFINED(MSWINDOWS)}
     LMsg := Format('%s - %s - %s', [LDateTime, ARoleName, AMsg]);
     Winapi.Windows.OutputDebugString(PChar(LMsg));
-  {$ENDIF}
-  {$IF DEFINED(ANDROID)}
+  {$ELSEIF DEFINED(ANDROID)}
     LMsg := Format('%s - %s', [ARoleName, AMsg]);
     var LLogService: IFMXLoggingService;
     if TPlatformServices.Current.SupportsPlatformService(IFMXLoggingService, LLogService) then
@@ -78,7 +77,7 @@ begin
 {$IF DEFINED(DEBUG) OR DEFINED(DEBUG_WS) OR DEFINED(CHECKSPEED)}
   LDateTime := FormatDateTime('hh:nn:ss', Now);
   LMsg := Format('%s - %s', [LDateTime, AMsg]);
-  {$IF DEFINED(MSWINDOWS) OR DEFINED(DEBUG_WS)}
+  {$IF DECLARED(Winapi.Windows.OutputDebugString) AND DEFINED(DEBUG_WS)}
   Winapi.Windows.OutputDebugString(PChar(LMsg));
   {$ENDIF}
   {$IF DEFINED(ANDROID)}
@@ -110,7 +109,7 @@ begin
     Exit;
 {$IF DEFINED(DEBUG) OR DEFINED(DEBUG_WS) OR DEFINED(CHECKSPEED)}
   LMsg := Format('%d: %d', [Number, Elapsed]);
-  {$IF DEFINED(MSWINDOWS) OR DEFINED(DEBUG_WS)}
+  {$IF DECLARED(Winapi.Windows.OutputDebugString) AND DEFINED(DEBUG_WS)}
   Winapi.Windows.OutputDebugString(PChar(LMsg));
   {$ENDIF}
   {$IF DEFINED(ANDROID)}

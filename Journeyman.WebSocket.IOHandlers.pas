@@ -138,13 +138,16 @@ implementation
 
 uses
   System.Math,
+{$IF DEFINED(ANDROID)}
+  FMX.Platform.Logger.Android.Fix,
+{$ENDIF}
 {$IF DEFINED(MSWINDOWS)}
   Winapi.Windows, IdWinsock2,
 {$ELSEIF DEFINED(POSIX)}
   Posix.SysSocket, FMX.Platform,
 {$ENDIF}
   IdStream, IdStack, IdExceptionCore, IdResourceStrings, IdResourceStringsCore,
-  IdStackConsts, Journeyman.WebSocket.Debugger, Journeyman.WebSocket.Consts,
+  IdStackConsts, Journeyman.WebSocket.DebugUtils, Journeyman.WebSocket.Consts,
   Journeyman.WebSocket.Exceptions;
 
 function BytesToStringRaw(const AValue: TIdBytes; aSize: Integer = -1): string;
@@ -414,11 +417,11 @@ begin
   if UseSingleWriteThread and IsWebSocket and
      (TThread.Current.ThreadID <> TIdWebSocketWriteThread.Instance.ThreadID) then
   begin
-    TInterlocked.Increment(FPendingWriteCount);
+    AtomicIncrement(FPendingWriteCount);
     TIdWebSocketWriteThread.Instance.QueueEvent(
       procedure
       begin
-        TInterlocked.Decrement(FPendingWriteCount);
+        AtomicDecrement(FPendingWriteCount);
         WriteLn(AOut, AEncoding);
       end)
   end
@@ -441,7 +444,7 @@ begin
   if UseSingleWriteThread and IsWebSocket and
      (TThread.Current.ThreadID <> TIdWebSocketWriteThread.Instance.ThreadID) then
   begin
-    TInterlocked.Increment(FPendingWriteCount);
+    AtomicIncrement(FPendingWriteCount);
     TIdWebSocketWriteThread.Instance.QueueEvent(
       procedure
       begin
@@ -468,11 +471,11 @@ begin
   if UseSingleWriteThread and IsWebSocket and
      (TThread.Current.ThreadID <> TIdWebSocketWriteThread.Instance.ThreadID) then
   begin
-    TInterlocked.Increment(FPendingWriteCount);
+    AtomicIncrement(FPendingWriteCount);
     TIdWebSocketWriteThread.Instance.QueueEvent(
       procedure
       begin
-        TInterlocked.Decrement(FPendingWriteCount);
+        AtomicDecrement(FPendingWriteCount);
         Write(AOut, AEncoding);
       end)
   end
@@ -495,11 +498,11 @@ begin
   if UseSingleWriteThread and IsWebSocket and
      (TThread.Current.ThreadID <> TIdWebSocketWriteThread.Instance.ThreadID) then
   begin
-    TInterlocked.Increment(FPendingWriteCount);
+    AtomicIncrement(FPendingWriteCount);
     TIdWebSocketWriteThread.Instance.QueueEvent(
       procedure
       begin
-        TInterlocked.Decrement(FPendingWriteCount);
+        AtomicDecrement(FPendingWriteCount);
         Write(AValue, AWriteLinesCount, AEncoding);
       end)
   end
@@ -522,11 +525,11 @@ begin
   if UseSingleWriteThread and IsWebSocket and
      (TThread.Current.ThreadID <> TIdWebSocketWriteThread.Instance.ThreadID) then
   begin
-    TInterlocked.Increment(FPendingWriteCount);
+    AtomicIncrement(FPendingWriteCount);
     TIdWebSocketWriteThread.Instance.QueueEvent(
       procedure
       begin
-        TInterlocked.Decrement(FPendingWriteCount);
+        AtomicDecrement(FPendingWriteCount);
         Write(AStream, aType);
       end)
   end
@@ -548,11 +551,11 @@ begin
   if UseSingleWriteThread and IsWebSocket and
      (TThread.Current.ThreadID <> TIdWebSocketWriteThread.Instance.ThreadID) then
   begin
-    TInterlocked.Increment(FPendingWriteCount);
+    AtomicIncrement(FPendingWriteCount);
     TIdWebSocketWriteThread.Instance.QueueEvent(
       procedure
       begin
-        TInterlocked.Decrement(FPendingWriteCount);
+        AtomicDecrement(FPendingWriteCount);
         WriteBin(ABytes);
       end)
   end
@@ -577,11 +580,11 @@ begin
   if UseSingleWriteThread and IsWebSocket and
      (TThread.Current.ThreadID <> TIdWebSocketWriteThread.Instance.ThreadID) then
   begin
-    TInterlocked.Increment(FPendingWriteCount);
+    AtomicIncrement(FPendingWriteCount);
     TIdWebSocketWriteThread.Instance.QueueEvent(
       procedure
       begin
-        TInterlocked.Decrement(FPendingWriteCount);
+        AtomicDecrement(FPendingWriteCount);
         WriteBufferFlush(AByteCount);
       end)
   end
@@ -591,7 +594,8 @@ end;
 
 function TIdIOHandlerWebSocket.WriteDataToTarget(const ABuffer: TIdBytes;
   const AOffset, ALength: Integer): Integer;
-var data: TIdBytes; DataCode:TWSDataCode; fin:boolean;
+var
+  LData: TIdBytes; LDataCode: TWSDataCode; LFin: Boolean;
 begin
   if UseSingleWriteThread and IsWebSocket and
     (TThread.Current.ThreadID <> TIdWebSocketWriteThread.Instance.ThreadID) then
@@ -610,17 +614,17 @@ begin
       Result := inherited WriteDataToTarget(ABuffer, AOffset, ALength)
     end else
     begin
-      data := ToBytes(ABuffer, ALength, AOffset);
+      LData := ToBytes(ABuffer, ALength, AOffset);
       {$IFDEF DEBUG_WS}
       if DebugHook > 0 then
         OutputDebugString(PChar(Format('Send (ws, TID:%d, P:%d): %s',
-          [TThread.Current.ThreadID, Binding.PeerPort, BytesToStringRaw(data)])));
+          [TThread.Current.ThreadID, Binding.PeerPort, BytesToStringRaw(LData)])));
 
       {$ENDIF}
       try
-        DataCode := FPayloadInfo.DataCode;
-        fin := FPayloadInfo.DecLength(ALength);
-        Result := WriteData(data, DataCode, fin,webBit1 in ClientExtensionBits,
+        LDataCode := FPayloadInfo.DataCode;
+        LFin := FPayloadInfo.DecLength(ALength);
+        Result := WriteData(LData, LDataCode, LFin, webBit1 in ClientExtensionBits,
           webBit2 in ClientExtensionBits, webBit3 in ClientExtensionBits);
       except
         FClosedGracefully := True;
@@ -892,8 +896,8 @@ end;
 
 procedure TIdIOHandlerWebSocket.NotifyClosing;
 begin
-{$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString(RoleName, 'TIdIOHandlerWebSocketSSL.NotifyClosing');
+{$IF DECLARED(OutputDebugString)}
+  OutputDebugString(RoleName, 'TIdIOHandlerWebSocketSSL.NotifyClosing');
 {$ENDIF}
   if Assigned(FOnNotifyClosing) then
     FOnNotifyClosing;
@@ -1224,9 +1228,10 @@ begin
       if Result<0 then
         begin
          // IO error ; probably connexion closed by peer on protocol error ?
-         {$IFDEF DEBUG_WS}
+         {$IF DECLARED(OutputDebugString)}
          if DebugHook > 0 then
-           OutputDebugString(PChar(Format('WriteError ThrID:%d, L:%d, R:%d',[getcurrentthreadid,Length(bData)-ioffset,Result])));
+           OutputDebugString(Format('WriteError ThrID:%d, L:%d, R:%d',
+             [TThread.Current.ThreadId, Length(bData)-ioffset, Result]));
          {$ENDIF}
          break;
        end;

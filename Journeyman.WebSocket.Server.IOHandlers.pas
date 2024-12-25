@@ -24,17 +24,38 @@ type
   TIdServerWebSocketHandling = class(TIdServerBaseHandling)
   protected
     class var FExitConnectedCheck: Boolean;
+    class var FSupportsPerMessageDeflate: Boolean;
+    FMaxWindowBits: Integer;
     class procedure DoWSExecute(AThread: TIdContext); virtual;
     class procedure HandleWSMessage(AContext: TIdServerWSContext;
       var AWSType: TWSDataType; ARequestStream, AResponseStream: TMemoryStream); virtual;
+    class procedure DoPingReceived(const ANow, ALastPingReceived: TDateTime); static;
+    class procedure DoPongReceived(const ANow, ALastPongReceived: TDateTime); static;
+    class procedure SetMaxWindowBits(const Value: Integer); static;
+    class procedure SetSupportsPerMessageDeflate(const Value: Boolean); static;
   public
+  type
+    TOnPingReceived = reference to procedure(const ANow, ALastPingReceived: TDateTime);
+    TOnPongReceived = reference to procedure(const ANow, ALastPongReceived: TDateTime);
+  class var
+    FOnPingReceived: TOnPingReceived;
+    FOnPongReceived: TOnPongReceived;
+    FPingInterval: Integer;
+  public
+    class constructor Create;
+    class destructor Destroy;
     class function ProcessServerCommandGet(AThread: TIdServerWSContext;
       const AConnectionEvents: TWebSocketConnectionEvents;
-      ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean;
+      ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean; static;
 
 //    class function CurrentSocket: ISocketIOContext;
     class property ExitConnectedCheck: Boolean read FExitConnectedCheck
       write FExitConnectedCheck;
+    class property OnPingReceived: TOnPingReceived read FOnPingReceived write FOnPingReceived;
+    class property OnPongReceived: TOnPongReceived read FOnPongReceived write FOnPongReceived;
+    class property PingInterval: Integer read FPingInterval write FPingInterval;
+    class property SupportsPerMessageDeflate: Boolean read FSupportsPerMessageDeflate write SetSupportsPerMessageDeflate;
+    class property MaxWindowBits: Integer read FMaxWindowBits write SetMaxWindowBits;
   end;
 
   TIdServerIOHandlerStack = class(TIdServerIOHandlerSocket)
@@ -56,24 +77,37 @@ type
 implementation
 
 uses
+  System.Math, // Min(x, y)... Max(x, y)
+  Journeyman.WebSocket.ArrayUtils,
   Journeyman.WebSocket.Consts,
-  Journeyman.WebSocket.Debugger;
+  Journeyman.WebSocket.DebugUtils,
+  Journeyman.WebSocket.CompressUtils;
 
 { TIdServerWebSocketHandling }
 
-//class function TIdServerWebSocketHandling.CurrentSocket: ISocketIOContext;
+class constructor TIdServerWebSocketHandling.Create;
+begin
+  FPingInterval := 5;
+  FMaxWindowBits := TServerMaxWindowBits.MinValue;
+  FSupportsPerMessageDeflate := True;
+end;
 //var
-//  LThread: TIdThreadWithTask;
-//  LContext: TIdServerWSContext;
-//begin
-//  if not (TThread.Current is TIdThreadWithTask) then
-//    Exit(nil);
-//  LThread  := TThread.Current as TIdThreadWithTask;
+class destructor TIdServerWebSocketHandling.Destroy;
+begin
+  FOnPingReceived := nil;
+  FOnPongReceived := nil;
+end;
+class procedure TIdServerWebSocketHandling.DoPingReceived(const ANow, ALastPingReceived: TDateTime);
+begin
+  if Assigned(FOnPingReceived) then
+    FOnPingReceived(ANow, ALastPingReceived);
+end;
 //  if not (LThread.Task is TIdServerWSContext) then
-//    Exit(nil);
-//  LContext := LThread.Task as TIdServerWSContext;
-//  Result  := LContext.SocketIO.GetSocketIOContext(LContext);
-//end;
+class procedure TIdServerWebSocketHandling.DoPongReceived(const ANow, ALastPongReceived: TDateTime);
+begin
+  if Assigned(FOnPongReceived) then
+    FOnPongReceived(ANow, ALastPongReceived);
+end;
 
 class procedure TIdServerWebSocketHandling.DoWSExecute(AThread: TIdContext);
 var
@@ -81,8 +115,7 @@ var
   LWSCode: TWSDataCode;
   LWSType: TWSDataType;
   LContext: TIdServerWSContext;
-  LLastPingReceived, LLastPingSent, LLastPongReceived, LLastPongSent,
-  LStart: TDateTime;
+  LLastPingReceived, LLastPingSent, LLastPongReceived, LLastPongSent: TDateTime;
   LHandler: IIOHandlerWebSocket;
 begin
   LContext   := nil;
@@ -103,7 +136,10 @@ begin
 //    end;
     AThread.Connection.Socket.UseNagle := False;  // no 200ms delay!
 
-    LStart := Now;
+    LLastPingSent := 0;
+    LLastPongSent := 0;
+    LLastPingReceived := 0;
+    LLastPongReceived := 0;
 
     while LHandler.Connected and not LHandler.ClosedGracefully do
     begin
@@ -111,7 +147,6 @@ begin
         (LHandler.InputBuffer.Size > 0) or
          LHandler.Readable(1 * 1000) then     // wait 5s, else ping the client(!)
       begin
-        LStart := Now;
 
         LStreamResponse := TMemoryStream.Create;
         LStreamRequest  := TMemoryStream.Create;
@@ -127,7 +162,7 @@ begin
           if LWSCode = wdcClose then
             begin
               {$IF DEFINED(DEBUG_WS)}
-              WSDebugger.OutputDebugString('Closing server session');
+              OutputDebugString('Closing server session');
               {$ENDIF}
               Break;
             end;
@@ -137,11 +172,16 @@ begin
           begin
             case LWSCode of
               wdcPing: begin
-              LHandler.WriteData(nil, wdcPong);
+                DoPingReceived(Now, LLastPingReceived);
                 LLastPingReceived := Now;
-                LLastPongSent := Now;
+                if SecondsBetween(Now, LLastPongSent) > FPingInterval then
+                  begin
+                    LHandler.WriteData(nil, wdcPong);
+                    LLastPongSent := Now;
+                  end;
               end;
               wdcPong: begin
+                DoPongReceived(Now, LLastPongReceived);
                 LLastPongReceived := Now;
               end;
             end;
@@ -151,6 +191,22 @@ begin
           if LWSCode = wdcText then
             LWSType := wdtText else
             LWSType := wdtBinary;
+
+          // Must check both client and server because it's possible for client not to support,
+          // while server supports it...
+          if (LContext.SupportsPerMessageDeflate) and
+             (LContext.ClientMaxWindowBits <> TClientMaxWindowBits.Disabled) and
+             (LContext.ServerMaxWindowBits <> TServerMaxWindowBits.Disabled) then
+            begin
+              var LLen := LStreamRequest.Size;
+              var LBytes: TArray<Byte>;
+              SetLength(LBytes, LLen);
+              LStreamRequest.Read(LBytes, LLen);
+              var LCompressedBytes := DecompressMessage(LBytes, LContext.ServerMaxWindowBits);
+              LStreamRequest.Size := 0;
+              LStreamRequest.Write(LCompressedBytes, Length(LCompressedBytes));
+              LStreamRequest.Position := 0;
+            end;
 
           HandleWSMessage(LContext, LWSType, LStreamRequest, LStreamResponse);
 
@@ -171,13 +227,10 @@ begin
         end;
       end
       // ping after 5s idle
-      else if SecondsBetween(Now, LStart) > 5 then
+      else if SecondsBetween(Now, LLastPingSent) > FPingInterval then
       begin
-        LStart := Now;
         // ping
-        begin
-          LHandler.WriteData(nil, wdcPing);
-        end;
+        LHandler.WriteData(nil, wdcPing);
         LLastPingSent := Now;
       end;
 
@@ -201,7 +254,8 @@ class function TIdServerWebSocketHandling.ProcessServerCommandGet(
   ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean;
 var
   Accept, LWasWebSocket: Boolean;
-  LConnection, sValue, LSGuid: string;
+  LAConnection, sValue, LSGuid: string;
+  LConnection: TArray<string>;
   LContext: TIdServerWSContext;
   LHash: TIdHashSHA1;
   LGuid: TGUID;
@@ -225,11 +279,12 @@ begin
      Sec-WebSocket-Version: 13 *)
 
   // Connection: Upgrade
-  LConnection := ARequestInfo.Connection;
+  LAConnection := ARequestInfo.Connection;
+  LConnection := SplitString(LAConnection, ', ');
   {$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString(Format('Connection string: "%s"', [LConnection]));
+  OutputDebugString(Format('Connection string: "%s"', [LConnection]));
   {$ENDIF}
-  if not ContainsText(LConnection, SUpgrade) then   //Firefox uses "keep-alive, Upgrade"
+  if PosInStrArray(SUpgrade, LConnection, False) = -1 then   // Firefox uses "keep-alive, Upgrade"
   begin
     // initiele ondersteuning voor socket.io
     if SameText(ARequestInfo.Document , '/socket.io/1/') then
@@ -288,7 +343,7 @@ begin
         LContext.WebSocketKey := sValue else
         begin
           {$IF DEFINED(DEBUG_WS)}
-          WSDebugger.OutputDebugString('Server', 'Invalid length');
+          OutputDebugString('Server', 'Invalid length');
           {$ENDIF}
           AResponseInfo.ContentText := 'Invalid length';
           AResponseInfo.ResponseNo  := CNoContent;
@@ -298,7 +353,7 @@ begin
     begin
       // important: key must exists, otherwise stop!
       {$IF DEFINED(DEBUG_WS)}
-      WSDebugger.OutputDebugString('Server', 'Aborting connection');
+      OutputDebugString('Server', 'Aborting connection');
       {$ENDIF}
       AResponseInfo.ContentText := 'Key doesn''t exist';
       AResponseInfo.ResponseNo  := CNoContent;
@@ -341,7 +396,7 @@ begin
       if LContext.WebSocketVersion < 13 then
         begin
           {$IF DEFINED(DEBUG_WS)}
-          WSDebugger.OutputDebugString('Server', 'WebSocket version < 13');
+          OutputDebugString('Server', 'WebSocket version < 13');
           {$ENDIF}
           AResponseInfo.ContentText := 'Wrong version';
           Exit(False); // Abort;  //must be at least 13
@@ -349,7 +404,7 @@ begin
     end else
     begin
       {$IF DEFINED(DEBUG_WS)}
-      WSDebugger.OutputDebugString('Server', 'WebSocket version missing');
+      OutputDebugString('Server', 'WebSocket version missing');
       {$ENDIF}
       AResponseInfo.ContentText := 'Missing version';
       Exit(False); // Abort; //must exist
@@ -358,6 +413,63 @@ begin
     LContext.WebSocketProtocol   := ARequestInfo.RawHeaders.Values[SWebSocketProtocol];
     LContext.WebSocketExtensions := ARequestInfo.RawHeaders.Values[SWebSocketExtensions];
     LContext.Encoding            := ARequestInfo.AcceptEncoding;
+    if SupportsPerMessageDeflate then
+      begin
+        var LWebSocketExtensions: TArray<string> := SplitString(LContext.WebSocketExtensions, '; ');
+        var LPerMessageDeflateIndex := PosInStrArray(SPerMessageDeflate, LWebSocketExtensions, False);
+        if LPerMessageDeflateIndex <> -1 then
+          begin
+            var LClientMaxWindowBitsParam := '';
+            RemoveEmptyElements(LWebSocketExtensions);
+            for var I := Low(LWebSocketExtensions) to High(LWebSocketExtensions) do
+              begin
+                if LWebSocketExtensions[I].StartsWith(SClientMaxWindowBits, True) then
+                  begin
+                    LClientMaxWindowBitsParam := LWebSocketExtensions[I];
+                    Break;
+                  end;
+              end;
+            if LClientMaxWindowBitsParam <> '' then
+              begin
+                var LClientMaxWindowBits := SplitString(LClientMaxWindowBitsParam, '=');
+                RemoveEmptyElements(LClientMaxWindowBits);
+                var LClientMaxWindowBitsLen := Length(LClientMaxWindowBits);
+                case LClientMaxWindowBitsLen of
+                  0: begin
+                    LContext.ClientMaxWindowBits := TClientMaxWindowBits.MinValue;
+                    if SupportsPerMessageDeflate then
+                      begin
+                        LContext.ServerMaxWindowBits := System.Math.Min(LContext.ClientMaxWindowBits, MaxWindowBits);
+                        LContext.SupportsPerMessageDeflate := True;
+                      end;
+                  end;
+                  1: begin
+                    LContext.ClientMaxWindowBits := TClientMaxWindowBits.MinValue;
+                    if SupportsPerMessageDeflate then
+                      begin
+                        LContext.ServerMaxWindowBits := LContext.ClientMaxWindowBits;
+                        LContext.SupportsPerMessageDeflate := True;
+                      end;
+                  end;
+                  2: begin
+                    LContext.ClientMaxWindowBits := StrToIntDef(LClientMaxWindowBits[1], TClientMaxWindowBits.MinValue);
+                    if SupportsPerMessageDeflate then
+                      begin
+                        LContext.ServerMaxWindowBits := LContext.ClientMaxWindowBits;
+                        LContext.SupportsPerMessageDeflate := True;
+                      end;
+                  end;
+                end;
+              end;
+            if LContext.SupportsPerMessageDeflate and
+               (LContext.ClientMaxWindowBits <> TClientMaxWindowBits.Disabled) and
+               (LContext.ServerMaxWindowBits <> TServerMaxWindowBits.Disabled) then
+              begin
+                var LValue := Format('%s; %s=%d', [SPerMessageDeflate, SClientMaxWindowBits, LContext.ServerMaxWindowBits]);
+                AResponseInfo.CustomHeaders.AddValue(SWebSocketExtensions, LValue);
+              end;
+          end; // if LPerMessageDeflateIndex <> -1
+      end; // end check for per-message deflate
 
     // Response
     (* HTTP/1.1 101 Switching Protocols
@@ -404,7 +516,7 @@ begin
 
     // handle all WS communication in separate loop
     {$IF DEFINED(DEBUG_WS)}
-    WSDebugger.OutputDebugString('Server', 'Entering DoWSExecute');
+    OutputDebugString('Server', 'Entering DoWSExecute');
     {$ENDIF}
     LWasWebSocket := False;
     try
@@ -421,7 +533,7 @@ begin
         begin
           var LMsg := Format('DoWSExecute Thread: %.8x Exception: %s', [
             TThread.Current.ThreadID, E.Message]);
-          WSDebugger.OutputDebugString('Server', LMsg);
+          OutputDebugString('Server', LMsg);
         end;
       {$ENDIF}
     end;
@@ -430,10 +542,30 @@ begin
     AResponseInfo.CloseConnection := True;
     {$IF DEFINED(DEBUG_WS)}
     var LMsg := Format('DoWSExecute Thread: %.8x done', [TThread.Current.ThreadID]);
-    WSDebugger.OutputDebugString('Server', LMsg);
+    OutputDebugString('Server', LMsg);
     {$ENDIF}
     Result := True;
   end;
+end;
+class procedure TIdServerWebSocketHandling.SetMaxWindowBits(const Value: Integer);
+begin
+  var LSupportsPerMessageDeflate := (Value >= TServerMaxWindowBits.MinValue) and (Value <= TServerMaxWindowBits.MaxValue);
+  if LSupportsPerMessageDeflate then
+    begin
+      FSupportsPerMessageDeflate := True;
+      FMaxWindowBits := Value;
+    end else
+    begin
+      FSupportsPerMessageDeflate := False;
+    end;
+end;
+
+class procedure TIdServerWebSocketHandling.SetSupportsPerMessageDeflate(const Value: Boolean);
+begin
+  if Value then
+    FMaxWindowBits := TServerMaxWindowBits.MinValue else
+    FMaxWindowBits := TServerMaxWindowBits.Disabled;
+  FSupportsPerMessageDeflate := Value;
 end;
 
 procedure TIdServerIOHandlerStack.InitComponent;

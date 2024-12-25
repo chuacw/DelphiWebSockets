@@ -5,10 +5,7 @@ interface
 uses
   System.Classes, System.Generics.Collections, System.SysUtils, System.StrUtils,
   IdContext, IdCustomTCPServer, IdException,
-  //
-//  IdServerBaseHandling,
   Journeyman.WebSocket.Types;
-//  IdSocketIOHandling
 
 type
   TIdServerSocketIOHandling = class(TIdBaseSocketIOHandling)

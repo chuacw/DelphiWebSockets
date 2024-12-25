@@ -5,7 +5,6 @@ uses
   System.Classes, IdHTTP, System.Types,
   IdHashSHA,                     // XE3 etc
   IdIOHandler,
-//  IdIOHandlerWebSocket,
   Journeyman.WebSocket.IOHandlers,
   System.Net.Socket,
 {$IF DEFINED(MSWINDOWS)}
@@ -23,8 +22,6 @@ type
   TWebSocketMsgText = reference to procedure(const AClient: TIdHTTPWebSocketClient;
     const AData: string);
 
-  TSocketIOMsg = procedure(const AClient: TIdHTTPWebSocketClient;
-    const aText: string; aMsgNr: Integer) of object;
 
 //  TIdSocketIOHandling_Ext = class(TIdSocketIOHandling)
 //  end;
@@ -53,20 +50,24 @@ type
     procedure SetUseSSL(const AValue: Boolean);
   protected
     FCS: System.SyncObjs.TCriticalSection;
-    FSocketIOCompatible: Boolean;
-    FSocketIOHandshakeResponse: string;
+//    FSocketIOCompatible: Boolean;
+//    FSocketIOHandshakeResponse: string;
 //    FSocketIO: TIdSocketIOHandling_Ext;
 //    FSocketIOContext: ISocketIOContext;
-    FSocketIOConnectBusy: Boolean;
+//    FSocketIOConnectBusy: Boolean;
     FUseSSL: Boolean;
     /// <summary>Assign a TProc to FCustomHeadersProc in order to inject headers
     /// before sending a response to a web socket's initial setup request.</summary>
     FCustomHeadersProc: TProc;
     FRequestType: TIdWebSocketRequestType;
 
+    FPerMessageDeflate: Boolean;
+    FClientMaxWindowBits: Integer;
+    FServerMaxWindowBits: Integer;
     // FHeartBeat: TTimer;
     // procedure HeartBeatTimer(Sender: TObject);
 //    function  GetSocketIO: TIdSocketIOHandling;
+    FReadThreads: TArray<TThread>;
   protected
     /// <summary>Provides an opportunity for overriding custom headers if FCustomHeadersProc is
     /// assigned a value, by calling it.</summary>
@@ -79,6 +80,9 @@ type
       out AFailedReason: string); virtual;
     procedure InternalWrite(const AStream: TStream);
     function  MakeImplicitClientHandler: TIdIOHandler; override;
+
+    procedure SetClientMaxWindowBits(const Value: Integer);
+    procedure SetPerMessageDeflate(const Value: Boolean);
     procedure SSLStatus(ASender: TObject; const AStatus: TIdStatus;
      const AStatusText: string);
      procedure SSLStatusInfoEx(ASender : TObject; const AsslSocket: PSSL;
@@ -141,7 +145,7 @@ type
     property  PeerPort: Word read GetPeerPort;
 
     // https://github.com/LearnBoost/socket.io-spec
-    property  SocketIOCompatible: Boolean read FSocketIOCompatible write FSocketIOCompatible;
+//    property  SocketIOCompatible: Boolean read FSocketIOCompatible write FSocketIOCompatible;
 //    property  SocketIO: TIdSocketIOHandling read GetSocketIO;
   published
     property  Host;
@@ -150,6 +154,9 @@ type
     property  WSResourceName: string read FWSResourceName write FWSResourceName;
 
     property  WriteTimeout: Integer read FWriteTimeout write SetWriteTimeout default 2000;
+    property  PerMessageDeflate: Boolean read FPerMessageDeflate write SetPerMessageDeflate;
+    property  ClientMaxWindowBits: Integer read FClientMaxWindowBits write SetClientMaxWindowBits;
+    property  ServerMaxWindowBits: Integer read FServerMaxWindowBits write FServerMaxWindowBits;
   end;
 
 implementation
@@ -166,9 +173,11 @@ uses
   Journeyman.WebSocket.Consts, IdURI,
   Journeyman.WebSocket.SSLIOHandlers,
   IdIPAddress,
-  Journeyman.WebSocket.Debugger, System.Diagnostics,
+  Journeyman.WebSocket.DebugUtils, System.Diagnostics,
   Journeyman.WebSocket.MultiReadThread, IdSSLOpenSSL,
-  Journeyman.WebSocket.Exceptions;
+  Journeyman.WebSocket.Exceptions,
+  Journeyman.WebSocket.ArrayUtils,
+  Journeyman.WebSocket.CompressUtils;
 
 { TIdHTTPWebSocketClient }
 
@@ -195,6 +204,15 @@ begin
 
   FWriteTimeout  := 2 * 1000;
   ConnectTimeout := 30000;
+
+// Disable permessage-deflate
+//  FClientMaxWindowBits := -1;
+//  FPerMessageDeflate   := False;
+
+// Support permessage-deflate
+  FClientMaxWindowBits := TClientMaxWindowBits.MaxValue;
+  FServerMaxWindowBits := TServerMaxWindowBits.Disabled;
+  FPerMessageDeflate   := True;
 end;
 
 procedure TIdHTTPWebSocketClient.AsyncDispatchEvent(const AEvent: TStream);
@@ -279,17 +297,17 @@ begin
       Exit;
     end;
 
-    if SocketIOCompatible and
-       not FSocketIOConnectBusy then
-    begin
-      TryUpgradeToWebSocket;
-    end
-    else
-    begin
+//    if SocketIOCompatible and
+//       not FSocketIOConnectBusy then
+//    begin
+//        TryUpgradeToWebSocket;
+//    end
+//    else
+//    begin
       // clear inputbuffer, otherwise it can't connect :(
       if (IOHandler <> nil) then IOHandler.Clear;
       inherited Connect;
-    end;
+
   finally
     Unlock;
   end;
@@ -309,7 +327,11 @@ var
 begin
   LUri := TIdURI.Create(AURL);
   try
-
+    // In case AURL consists of protocol://username:password@host:port
+    Request.Username := LUri.Username;
+    Request.Password := LUri.Password;
+    if Request.Username <> '' then
+      Request.BasicAuthentication := True;
     LNewSSL := SameText(LUri.Protocol, 'wss');
     LNewHost := LUri.Host;
     LNewPort := 0;
@@ -348,7 +370,6 @@ begin
     finally
       Unlock;
     end;
-//    FSocketIO.Free;
     FHash.Free;
     TThread.Current.NameThreadForDebugging('Calling inherited on WebSocketClient ' + TThread.Current.ThreadID.ToString);
     inherited; // This will send the required closes
@@ -360,18 +381,8 @@ end;
 
 procedure TIdHTTPWebSocketClient.Disconnect(ANotifyPeer: Boolean);
 begin
-  if not SocketIOCompatible and
-     ( (IOHandler <> nil) and not IOHandler.IsWebSocket)
-  then
+  if (IOHandler <> nil) and (not IOHandler.IsWebSocket) then
     TIdWebSocketMultiReadThread.Instance.RemoveClient(Self);
-
-//  if ANotifyPeer and SocketIOCompatible then
-//    FSocketIO.WriteDisconnect(FSocketIOContext as TSocketIOContext)
-//  else
-//    FSocketIO.FreeConnection(FSocketIOContext as TSocketIOContext);
-
-//  IInterface(FSocketIOContext)._Release;
-//  FSocketIOContext := nil;
 
   Lock;
   try
@@ -476,7 +487,6 @@ var
   sError: string;
 begin
   try
-    FSocketIOConnectBusy := True;
     Lock;
     try
       if (IOHandler <> nil) and IOHandler.IsWebSocket then
@@ -485,7 +495,6 @@ begin
       InternalUpgradeToWebSocket(False{no raise}, sError);
       Result := (sError = '');
     finally
-      FSocketIOConnectBusy := False;
       Unlock;
     end;
   except
@@ -521,7 +530,19 @@ begin
     Exit;
   if LHandler.Connected then
     begin
-      LHandler.Write(AMessage);
+      // Check support for permessage-deflate
+      if PerMessageDeflate and
+        (ClientMaxWindowBits <> TClientMaxWindowBits.Disabled) and
+        (ServerMaxWindowBits <> TServerMaxWindowBits.Disabled) then
+      begin
+        var LBytes := TEncoding.UTF8.GetBytes(AMessage);
+        var LCompressedBytes := TIdBytes(CompressMessage(LBytes, ServerMaxWindowBits));
+        // don't send compressed bytes first...
+        // LHandler.WriteData(LCompressedBytes, wdcText, )
+      end else
+      begin
+        LHandler.Write(AMessage);
+      end;
     end;
 end;
 
@@ -567,14 +588,6 @@ begin
       end;
     end;
 
-//  if ANotifyPeer and SocketIOCompatible then
-//    FSocketIO.WriteDisconnect(FSocketIOContext as TSocketIOContext)
-//  else
-//    FSocketIO.FreeConnection(FSocketIOContext as TSocketIOContext);
-
-//  IInterface(FSocketIOContext)._Release;
-//  FSocketIOContext := nil;
-
   Lock;
   try
     if LHandler <> nil then
@@ -609,10 +622,9 @@ procedure TIdHTTPWebSocketClient.InternalUpgradeToWebSocket(
   end;
 
 var
-  LURL: string;
+  LURL, LKey, LResponseKey, LUserAgent, LWSResourceName: string;
+  LConnection: TArray<string>;
   LStreamResponse: TMemoryStream;
-  LKey, LResponseKey, LUserAgent, LWSResourceName: string;
-  LSocketioExtended: string;
   LLocked: boolean;
   LHandler: IIOHandlerWebSocket;
 begin
@@ -635,42 +647,6 @@ begin
       LHandler.Clear;
     end;
 
-    // special socket.io handling, see https://github.com/LearnBoost/socket.io-spec
-    if SocketIOCompatible then
-    begin
-      Request.Clear;
-      Request.Connection := 'keep-alive';
-      LURL := Format('http%s://%s:%d/socket.io/1/', [IfThen(UseSSL, 's', ''), Host, Port]);
-      LStreamResponse.Clear;
-
-      ReadTimeout := 5 * 1000;
-      // get initial handshake
-      Post(LURL, LStreamResponse, LStreamResponse);
-      if ResponseCode = 200 {OK} then
-      begin
-        // if not Connected then  //reconnect
-        //  Self.Connect;
-        LStreamResponse.Position := 0;
-        // The body of the response should contain the session id (sid) given to the client,
-        // followed by the heartbeat timeout, the connection closing timeout, and the list of supported transports separated by :
-        // 4d4f185e96a7b:15:10:websocket,xhr-polling
-        with TStreamReader.Create(LStreamResponse) do
-        try
-          FSocketIOHandshakeResponse := ReadToEnd;
-        finally
-          Free;
-        end;
-        LKey := Copy(FSocketIOHandshakeResponse, 1, Pos(':', FSocketIOHandshakeResponse)-1);
-        LSocketioExtended := 'socket.io/1/websocket/' + LKey;
-        WSResourceName := LSocketioExtended;
-      end else
-      begin
-        AFailedReason := Format('Initial socket.io handshake failed: "%d: %s"',[ResponseCode, ResponseText]);
-        if ARaiseException then
-          raise EIdWebSocketHandleError.Create(AFailedReason);
-      end;
-    end;
-
     LUserAgent := Request.UserAgent;
     Request.Clear;
     Request.CustomHeaders.Clear;
@@ -688,6 +664,11 @@ begin
     // Connection: Upgrade
     Request.UserAgent := LUserAgent;
     Request.CustomHeaders.AddValue(SConnection, SKeepAlive+', ' + SUpgrade);
+
+    // User Authentication
+    if Request.Username <> '' then
+      Request.BasicAuthentication := True;
+
     // Upgrade: websocket
     Request.CustomHeaders.AddValue(SUpgrade, SWebSocket);
 
@@ -702,13 +683,20 @@ begin
     // Sec-WebSocket-Version: 13
     Request.CustomHeaders.AddValue(SWebSocketVersion, '13');
 
+    // Compression
+    if PerMessageDeflate then
+      begin
+        var LValue: string := Format('%s; %s=%d', [SPerMessageDeflate, SClientMaxWindowBits, ClientMaxWindowBits]);
+        Request.CustomHeaders.AddValue(SWebSocketExtensions, LValue);
+      end;
+
     FPeerHost := Host;
     FPeerPort := Port;
     Request.CacheControl := SNoCache;
     Request.Pragma := SNoCache;
     Request.Host := Format('Host: %s:%d', [Host, Port]);
     Request.CustomHeaders.AddValue(SHTTPOriginHeader,
-      Format('http%s://%s:%d', [IfThen(UseSSL, 's', ''), Host, Port]));
+      Format('ws%s://%s:%d', [IfThen(UseSSL, 's', ''), Host, Port]));
     DoCustomHeaders;
 
     // ws://host:port/<resourcename>
@@ -717,7 +705,7 @@ begin
     if WSResourceName.StartsWith('/') then
       LWSResourceName := WSResourceName.Substring(1) else
       LWSResourceName := WSResourceName;
-    LURL := Format('http%s://%s:%d/%s', [IfThen(UseSSL, 's', ''), Host, Port, LWSResourceName]);
+    LURL := Format('ws%s://%s:%d/%s', [IfThen(UseSSL, 's', ''), Host, Port, LWSResourceName]);
     ReadTimeout := Max(5 * 1000, ReadTimeout);
 
     { voorbeeld:
@@ -734,51 +722,19 @@ begin
     User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.116 Safari/537.36
     Cookie: __utma=1.2040118404.1366961318.1366961318.1366961318.1; __utmc=1; __utmz=1.1366961318.1.1.utmcsr=(direct)|utmccn=(direct)|utmcmd=(none); deviceorder=0123456789101112; MultiTouchEnabled=false; device=3; network_type=0
     }
-    if SocketIOCompatible then
-    begin
       // 1st, try to do socketio specific connection
-      Response.Clear;
-      Response.ResponseCode := 0;
-      Request.URL    := LURL;
-      Request.Method := Id_HTTPMethodGet;
-      Request.Source := nil;
-      Response.ContentStream := LStreamResponse;
-      PrepareRequest(Request);
 
       // connect and upgrade
-      ConnectToHost(Request, Response);
 
       // check upgrade succesful
-      CheckForGracefulDisconnect(True);
-      CheckConnected;
-      Assert(Connected);
 
-      if Response.ResponseCode = 0 then
-        Response.ResponseText := Response.ResponseText else
-      if Response.ResponseCode <> 200{ok} then
-      begin
-        AFailedReason := Format('Error while upgrading: "%d: %s"',[ResponseCode, ResponseText]);
-        if ARaiseException then
-          raise EIdWebSocketHandleError.Create(AFailedReason)
-        else
-          Exit;
-      end;
 
       // 2nd, get websocket response
-      Response.Clear;
-      if LHandler.CheckForDataOnSource(ReadTimeout) then
-      begin
-        FHTTPProto.RetrieveHeaders(MaxHeaderLines);
         // Response.RawHeaders.Text := IOHandler.InputBufferAsString();
-        Response.ResponseText := Response.RawHeaders.Text;
-      end;
-    end else
-    begin
       case FRequestType of
         wsrtGet: Get(LURL, LStreamResponse, [101]);
         wsrtPost: begin
             Post(LURL, LStreamResponse, [101]);
-        end;
       end;
     end;
 
@@ -802,8 +758,47 @@ begin
       else
         Exit;
     end;
-    // connection: upgrade
-    if not SameText(Response.Connection, SUpgrade) then
+
+    // Check for Sec-WebSocket-Extensions if we support it
+    if (ClientMaxWindowBits <> TClientMaxWindowBits.Disabled) and PerMessageDeflate then
+      begin
+        var LWebSocketExtensionsHeader := Response.RawHeaders.Values[SWebSocketExtensions];
+        if (LWebSocketExtensionsHeader <> '') then
+        begin
+          var LWebSocketExtensionsArray := SplitString(LWebSocketExtensionsHeader, '; ');
+          var LPerMessageDeflateIndex := PosInStrArray(SPerMessageDeflate, LWebSocketExtensionsArray, False);
+          if LPerMessageDeflateIndex <> -1 then
+            begin
+              RemoveEmptyElements(LWebSocketExtensionsArray);
+              var LClientMaxWindowBitsParam := '';
+              for var I := Low(LWebSocketExtensionsArray) to High(LWebSocketExtensionsArray) do
+                begin
+                  if LWebSocketExtensionsArray[I].StartsWith(SClientMaxWindowBits, True) then
+                    begin
+                      LClientMaxWindowBitsParam := LWebSocketExtensionsArray[I];
+                      Break;
+                    end;
+                end;
+              if LClientMaxWindowBitsParam <> '' then
+                begin
+                  var LClientMaxWindowBitsArray := SplitString(LClientMaxWindowBitsParam, '=');
+                  RemoveEmptyElements(LClientMaxWindowBitsArray);
+                  case Length(LClientMaxWindowBitsArray) of
+                    1: begin
+                      // No value supplied, so server wants to use our value
+                      ServerMaxWindowBits := ClientMaxWindowBits;
+                    end;
+                    2: begin
+                      ServerMaxWindowBits := StrToIntDef(LClientMaxWindowBitsArray[1], ClientMaxWindowBits);
+                    end;
+                  end;
+                end;
+            end;
+        end;
+      end;
+    // connection: upgrade, xxx
+    LConnection := SplitString(Response.Connection, ',');
+    if PosInStrArray(SUpgrade, LConnection, False) = -1 then
     begin
       AFailedReason := Format('Connection not upgraded: "%s"',[Response.Connection]);
       if ARaiseException then
@@ -865,15 +860,19 @@ begin
     begin
       // chuacw fix, add to thread after successful connection
       if not NoAsyncRead then
-        TIdWebSocketMultiReadThread.Instance.AddClient(Self);
+        begin
+          TIdWebSocketMultiReadThread.Instance.AddClient(Self);
+        end;
 
+      {$REGION 'Socket timeout'}
+      {$IF DEFINED(SOCKET_TIMEOUT)}
 {$IF DEFINED(MSWINDOWS)}
       try
         InternalSetWriteTimeout(WriteTimeout);
       except
         {$IF DEFINED(DEBUG_WS)}
         on E: Exception do
-          WSDebugger.OutputDebugString('WriteTimeout not supported? error: ' + E.Message);
+          OutputDebugString('WriteTimeout not supported? error: ' + E.Message);
         {$ENDIF}
       end;
 {$ELSEIF DEFINED(ANDROID)}
@@ -887,7 +886,7 @@ begin
           begin
             var LLine := Format('WriteTimeout not supported. Type: %s, error: %s',
               [E.ClassName, E.Message]);
-            WSDebugger.OutputDebugString(LLine);
+            OutputDebugString(LLine);
           end;
         {$ENDIF}
       end;
@@ -900,11 +899,13 @@ begin
           begin
             var LLine := Format('WriteTimeout not supported. Type: %s, error: %s',
               [E.ClassName, E.Message]);
-            WSDebugger.OutputDebugString(LLine);
+            OutputDebugString(LLine);
           end;
         {$ENDIF}
       end;
-{$ENDIF}
+      {$ENDIF}
+      {$ENDIF DEFINED(SOCKET_TIMEOUT)}
+      {$ENDREGION 'Socket timeout'}
     end;
 end;
 
@@ -921,11 +922,30 @@ begin
 //  System.TMonitor.Enter(Self);
 end;
 
+procedure TIdHTTPWebSocketClient.SetClientMaxWindowBits(const Value: Integer);
+begin
+  if Value > TClientMaxWindowBits.MaxValue then
+    FClientMaxWindowBits := TClientMaxWindowBits.MaxValue else
+    FClientMaxWindowBits := Value;
+  FPerMessageDeflate := (Value >= TClientMaxWindowBits.MinValue) and (Value <= TClientMaxWindowBits.MaxValue);
+end;
+procedure TIdHTTPWebSocketClient.SetPerMessageDeflate(const Value: Boolean);
+begin
+  if Value then
+    begin
+      FClientMaxWindowBits := TClientMaxWindowBits.MinValue;
+      FPerMessageDeflate := True;
+    end else
+    begin
+      FClientMaxWindowBits := TClientMaxWindowBits.Disabled;
+      FPerMessageDeflate := False;
+    end;
+end;
 procedure TIdHTTPWebSocketClient.SSLStatus(ASender: TObject;
   const AStatus: TIdStatus; const AStatusText: string);
 begin
 {$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString('SSL', AStatusText);
+  OutputDebugString('SSL', AStatusText);
 {$ENDIF}
 end;
 
@@ -934,7 +954,7 @@ procedure TIdHTTPWebSocketClient.SSLStatusInfoEx(ASender : TObject; const AsslSo
 begin
 {$IF DEFINED(DEBUG_WS)}
   var LLine := Format('AType: %s, AMsg: %s', [AType, AMsg]);
-  WSDebugger.OutputDebugString('SSL', LLine);
+  OutputDebugString('SSL', LLine);
 {$ENDIF}
 end;
 
@@ -997,7 +1017,7 @@ var
   LWSCode: TWSDataCode;
 begin
 {$IF DEFINED(DEBUG_WS)}
-  WSDebugger.OutputDebugString('WSChat', 'Entering ReadAndProcessData');
+  OutputDebugString('WSChat', 'Entering ReadAndProcessData');
 {$ENDIF}
   LStreamEvent := nil;
   var LHandler := IOHandler;
@@ -1025,6 +1045,19 @@ begin
       if LWSCode in [wdcPing, wdcPong] then
         Continue;
 
+      // permessage-deflate
+      if PerMessageDeflate and (ClientMaxWindowBits <> TClientMaxWindowBits.Disabled) and
+        (ServerMaxWindowBits <> TServerMaxWindowBits.Disabled) and (LWSCode = wdcText) then
+        begin
+          var LBytes: TArray<Byte>;
+          var LLen := LStreamEvent.Size;
+          SetLength(LBytes, LLen);
+          LStreamEvent.Read(LBytes[0], LLen);
+          var LDecompressedBytes := DecompressMessage(LBytes, ServerMaxWindowBits);
+          LStreamEvent.Size := 0;
+          LStreamEvent.Write(LDecompressedBytes, Length(LDecompressedBytes));
+        end;
+
       // fire event
       // offload event dispatching to different thread! otherwise deadlocks possible? (do to synchronize)
       LStreamEvent.Position := 0;
@@ -1043,7 +1076,7 @@ begin
                 AsyncDispatchEvent(string(LWSText));
               end;
             {$IF DEFINED(DEBUG_WS)}
-            WSDebugger.OutputDebugString('WSChat', 'Leaving wdcText');
+            OutputDebugString('WSChat', 'Leaving wdcText');
             {$ENDIF}
           end;
       end;
@@ -1052,7 +1085,7 @@ begin
     LHandler.Unlock;
     LStreamEvent.Free;
     {$IF DEFINED(DEBUG_WS)}
-    WSDebugger.OutputDebugString('WSChat', 'Leaving ReadAndProcessData');
+    OutputDebugString('WSChat', 'Leaving ReadAndProcessData');
     {$ENDIF}
   end;
 end;

@@ -66,5 +66,12 @@ __recovery/
 *.stat
 Tests/
 Demo/
+
+Android/
+Android64/
+iOSDevice64/
+Linux64/
+OSX64/
+OSXARM64/
 Win32/
 Win64/
